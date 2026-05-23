@@ -27,6 +27,8 @@ app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
     if (corsOrigins.includes(origin)) return callback(null, true);
+    // Préviews Vercel (ex. nexapay-xxx.vercel.app)
+    if (/^https:\/\/[\w-]+\.vercel\.app$/.test(origin)) return callback(null, true);
     callback(null, false);
   },
   credentials: true,

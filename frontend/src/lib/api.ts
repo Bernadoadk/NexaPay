@@ -5,7 +5,10 @@ const apiBase =
   import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
   '/api';
 
-const api = axios.create({ baseURL: apiBase });
+const api = axios.create({
+  baseURL: apiBase,
+  timeout: 60000,
+});
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
