@@ -8,8 +8,7 @@ import { useEntrance } from '@/hooks/useAnime';
 import { useTheme } from '@/contexts/ThemeContext';
 import PhoneCountryInput from '@/components/ui/PhoneCountryInput';
 import { toE164 } from '@/lib/phone';
-import logoSrc from '@/assets/Logo.png';
-import logoDarkSrc from '@/assets/Logo-dark.png';
+import { LOGO_URL, LOGO_DARK_URL } from '@/lib/branding';
 import { FileText, Users, Smartphone } from 'lucide-react';
 
 interface FormData {
@@ -136,7 +135,7 @@ export default function Register() {
         <div className="absolute bottom-0 -left-16 w-64 h-64 rounded-full opacity-10" style={{ background: 'rgba(255,255,255,0.3)' }} />
 
         <div className="relative z-10">
-          <img src={logoSrc} alt="NexaPay" className="h-20 w-auto object-contain brightness-0 invert" />
+          <img src={LOGO_URL} alt="NexaPay" className="h-20 w-auto object-contain brightness-0 invert" />
         </div>
 
         <div className="relative z-10 flex-1 flex items-center">
@@ -176,7 +175,7 @@ export default function Register() {
         <div ref={rightRef} className="w-full max-w-[420px]">
           {/* Logo mobile uniquement */}
           <div className="lg:hidden mb-8 flex justify-center">
-            <img src={isDark ? logoDarkSrc : logoSrc} alt="NexaPay" className="h-16 w-auto object-contain" />
+            <img src={isDark ? LOGO_DARK_URL : LOGO_URL} alt="NexaPay" className="h-16 w-auto object-contain" />
           </div>
 
           <div className="mb-8">
