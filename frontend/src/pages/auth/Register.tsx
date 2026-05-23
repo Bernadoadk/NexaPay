@@ -120,6 +120,10 @@ export default function Register() {
       login(res.data.token, res.data.user);
       navigate('/');
     } catch (e: any) {
+      if (!e.response) {
+        setError('Impossible de joindre l\'API. Vérifiez que le backend Vercel est déployé et que VITE_API_URL est correct.');
+        return;
+      }
       setError(e.response?.data?.message || 'Erreur lors de la création du compte');
     }
   }

@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { OAuth2Client } from 'google-auth-library';
 import appleSignin from 'apple-signin-auth';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -10,7 +11,6 @@ import { sendOtpEmail } from '../utils/email';
 import { toE164 } from '../utils/phone';
 
 const router = Router();
-const prisma = new PrismaClient();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 function generateOtp(): string {
@@ -22,7 +22,12 @@ async function createAndSendOtp(userId: string, email: string, name: string): Pr
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await prisma.otpCode.create({ data: { email, code, expiresAt, userId } });
-  await sendOtpEmail(email, code, name);
+  try {
+    await sendOtpEmail(email, code, name);
+  } catch (err) {
+    console.error('[OTP] Envoi email échoué:', err);
+    // Compte créé — l'utilisateur pourra demander un nouveau code (resend-otp)
+  }
 }
 
 // POST /auth/register
@@ -32,51 +37,64 @@ router.post(
   body('password').isLength({ min: 6 }),
   body('name').trim().notEmpty(),
   async (req, res): Promise<void> => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
 
-    const { email, password, name, companyName, phoneCountry } = req.body;
-    const country = phoneCountry || 'bj';
-    const phone = req.body.phone ? toE164(req.body.phone, country) : undefined;
-    const existing = await prisma.user.findUnique({ where: { email } });
+      const { email, password, name, companyName, phoneCountry } = req.body;
+      const country = phoneCountry || 'bj';
+      const phone = req.body.phone ? toE164(req.body.phone, country) : undefined;
+      const existing = await prisma.user.findUnique({ where: { email } });
 
-    if (existing) {
-      if (existing.isEmailVerified) {
-        res.status(409).json({ message: 'Email déjà utilisé' });
+      if (existing) {
+        if (existing.isEmailVerified) {
+          res.status(409).json({ message: 'Email déjà utilisé' });
+          return;
+        }
+        const hashed = await bcrypt.hash(password, 10);
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { password: hashed, name, companyName, phone, phoneCountry: country },
+        });
+        await createAndSendOtp(existing.id, email, name);
+        res.status(200).json({ requiresVerification: true, email });
         return;
       }
+
       const hashed = await bcrypt.hash(password, 10);
-      await prisma.user.update({
-        where: { id: existing.id },
-        data: { password: hashed, name, companyName, phone, phoneCountry: country },
+      const user = await prisma.user.create({
+        data: {
+          email, password: hashed, name, companyName,
+          phone, phoneCountry: country,
+          isEmailVerified: false, authProvider: 'email',
+          aiCredits: 10,
+        },
       });
-      await createAndSendOtp(existing.id, email, name);
-      res.status(200).json({ requiresVerification: true, email });
-      return;
+
+      await prisma.creditTransaction.create({
+        data: {
+          userId: user.id,
+          amount: 10,
+          type: 'signup_bonus',
+          description: 'Crédits offerts à l\'inscription',
+          balanceAfter: 10,
+        },
+      });
+
+      await createAndSendOtp(user.id, email, name);
+      res.status(201).json({ requiresVerification: true, email });
+    } catch (err) {
+      console.error('[Register]', err);
+      if (err instanceof Prisma.PrismaClientInitializationError) {
+        res.status(503).json({ message: 'Base de données inaccessible. Vérifiez DATABASE_URL sur Vercel.' });
+        return;
+      }
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2021') {
+        res.status(503).json({ message: 'Tables manquantes. Exécutez: npx prisma db push' });
+        return;
+      }
+      res.status(500).json({ message: 'Erreur lors de la création du compte' });
     }
-
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email, password: hashed, name, companyName,
-        phone, phoneCountry: country,
-        isEmailVerified: false, authProvider: 'email',
-        aiCredits: 10,
-      },
-    });
-
-    await prisma.creditTransaction.create({
-      data: {
-        userId: user.id,
-        amount: 10,
-        type: 'signup_bonus',
-        description: 'Crédits offerts à l\'inscription',
-        balanceAfter: 10,
-      },
-    });
-
-    await createAndSendOtp(user.id, email, name);
-    res.status(201).json({ requiresVerification: true, email });
   }
 );
 

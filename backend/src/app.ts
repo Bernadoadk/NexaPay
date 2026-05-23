@@ -12,6 +12,7 @@ import { uploadRouter } from './routes/upload';
 import { creditsRouter } from './routes/credits';
 import { aiRouter } from './routes/ai';
 import { errorHandler } from './middleware/errorHandler';
+import { prisma } from './lib/prisma';
 
 const app = express();
 
@@ -44,7 +45,19 @@ app.use('/api/upload', uploadRouter);
 app.use('/api/credits', creditsRouter);
 app.use('/api/ai', aiRouter);
 
-app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'connected' });
+  } catch (err) {
+    console.error('[Health] DB:', err);
+    res.status(503).json({
+      status: 'error',
+      database: 'disconnected',
+      hint: 'Vérifiez DATABASE_URL (Neon pooled) et exécutez npx prisma db push',
+    });
+  }
+});
 
 app.use(errorHandler);
 
