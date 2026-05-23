@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/api';
 import { useEntrance } from '@/hooks/useAnime';
 import { useTheme } from '@/contexts/ThemeContext';
-import { LOGO_URL, LOGO_DARK_URL } from '@/lib/branding';
+import logoSrc from '@/assets/Logo.png';
+import logoDarkSrc from '@/assets/Logo-dark.png';
 
 interface FormData {
   email: string;
@@ -114,7 +115,7 @@ export default function Login() {
         <div className="absolute bottom-0 -left-16 w-64 h-64 rounded-full opacity-10" style={{ background: 'rgba(255,255,255,0.3)' }} />
         <div className="absolute top-1/2 right-8 w-32 h-32 rounded-full opacity-5" style={{ background: 'rgba(255,255,255,0.6)' }} />
         <div className="relative z-10">
-          <img src={LOGO_URL} alt="NexaPay" className="h-20 w-auto object-contain brightness-0 invert" />
+          <img src={logoSrc} alt="NexaPay" className="h-20 w-auto object-contain brightness-0 invert" />
         </div>
         <div className="relative z-10 flex-1 flex items-center">
           <div>
@@ -147,7 +148,7 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center p-6 lg:p-16">
         <div ref={rightRef} className="w-full max-w-[420px]">
           <div className="lg:hidden mb-8 flex justify-center">
-            <img src={isDark ? LOGO_DARK_URL : LOGO_URL} alt="NexaPay" className="h-16 w-auto object-contain" />
+            <img src={isDark ? logoDarkSrc : logoSrc} alt="NexaPay" className="h-16 w-auto object-contain" />
           </div>
 
           <div className="mb-8">

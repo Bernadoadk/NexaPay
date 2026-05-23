@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/api';
 import { useTheme } from '@/contexts/ThemeContext';
-import { LOGO_URL, LOGO_DARK_URL } from '@/lib/branding';
+import logoSrc from '@/assets/Logo.png';
+import logoDarkSrc from '@/assets/Logo-dark.png';
 
 export default function VerifyOTP() {
   const { login } = useAuth();
@@ -94,7 +95,7 @@ export default function VerifyOTP() {
     <div className="min-h-screen flex items-center justify-center bg-bg p-6">
       <div className="w-full max-w-[420px]">
         <div className="flex justify-center mb-8">
-          <img src={isDark ? LOGO_DARK_URL : LOGO_URL} alt="NexaPay" className="h-16 w-auto object-contain" />
+          <img src={isDark ? logoDarkSrc : logoSrc} alt="NexaPay" className="h-16 w-auto object-contain" />
         </div>
 
         <div className="mb-8 text-center">

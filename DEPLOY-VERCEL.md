@@ -63,8 +63,8 @@ URL finale exemple : `https://nexapay-api.vercel.app`
 | **Project Name** | `nexapay-api` |
 | **Framework Preset** | Other |
 | **Root Directory** | Cliquer **Edit** → taper `backend` → **Continue** |
-| **Build Command** | `npm run build` (génère Prisma uniquement) |
-| **Output Directory** | `public` *(dossier `backend/public` dans le repo)* |
+| **Build Command** | (laisser vide ou `npm run build`) |
+| **Output Directory** | (laisser vide) |
 | **Install Command** | `npm install` |
 
 Vercel détecte `backend/vercel.json` automatiquement.
@@ -238,9 +238,7 @@ Configurer Sign in with Apple pour le domaine / l’URL de production Vercel.
 | CORS / bloqué par le navigateur | `FRONTEND_URL` = URL Vercel frontend exacte → redeploy backend |
 | Network Error | `VITE_API_URL` avec `/api` → redeploy frontend |
 | 500 sur `/api/health` | Logs Vercel backend ; vérifier `DATABASE_URL` Neon pooled |
-| Build backend « No Output Directory public » | Output Directory = `public` ; pousser le dernier code (`backend/public/`) |
 | Build backend échoue | Logs : souvent `prisma generate` — vérifier `DATABASE_URL` |
-| Build frontend logos / `import.meta.env` | Pousser le dernier code (`vite-env.d.ts`, `public/logo.svg`) |
 | API lente au 1er clic | Normal (cold start Vercel gratuit) |
 
 ---

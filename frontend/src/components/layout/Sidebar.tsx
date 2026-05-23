@@ -11,7 +11,8 @@ import {
 import { useEntrance, useChildrenStagger } from '@/hooks/useAnime';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Sparkles } from 'lucide-react';
-import { LOGO_URL, LOGO_DARK_URL } from '@/lib/branding';
+import logoSrc from '@/assets/Logo.png';
+import logoDarkSrc from '@/assets/Logo-dark.png';
 
 const PLAN_LABELS: Record<string, string> = { FREE: 'Gratuit', PRO: 'Pro', BUSINESS: 'Business' };
 
@@ -57,7 +58,7 @@ export default function Sidebar() {
     <aside className="w-[232px] flex-shrink-0 bg-surface border-r border-border flex flex-col p-[14px] h-full">
       {/* Logo */}
       <div ref={logoRef} className="flex justify-center pb-[18px]">
-        <img src={isDark ? LOGO_DARK_URL : LOGO_URL} alt="NexaPay" className="h-16 w-auto object-contain" />
+        <img src={isDark ? logoDarkSrc : logoSrc} alt="NexaPay" className="h-16 w-auto object-contain" />
       </div>
 
       {/* Create button */}
