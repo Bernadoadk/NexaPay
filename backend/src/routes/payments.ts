@@ -82,7 +82,7 @@ router.post('/initiate/:quoteId', authenticate, async (req: AuthRequest, res): P
       description: `${quote.number} — ${quote.title}`,
       amount: Math.round(quote.total),
       currency: { iso: 'XOF' },
-      callback_url: `${frontendUrl}/payment-success?quoteId=${quote.id}`,
+      callback_url: `${frontendUrl}/pay/success?quoteId=${quote.id}`,
       customer: {
         firstname: contactParts[0] || 'Client',
         lastname: contactParts.slice(1).join(' ') || '.',

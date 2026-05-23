@@ -1,0 +1,13 @@
+# Blueprint Render — backend NexaPay
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: nexapay-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+  # preDeployCommand (à activer dans le dashboard Render si besoin) :
+  # npx prisma db push

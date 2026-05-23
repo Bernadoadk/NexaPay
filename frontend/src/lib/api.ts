@@ -1,6 +1,11 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api' });
+// Dev : proxy Vite (/api → localhost:3001). Prod : VITE_API_URL sur Vercel.
+const apiBase =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
+  '/api';
+
+const api = axios.create({ baseURL: apiBase });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
