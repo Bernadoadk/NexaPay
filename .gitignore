@@ -1,0 +1,106 @@
+# Dépendances
+node_modules/
+.pnp
+.pnp.js
+
+# Builds
+dist/
+build/
+*.tsbuildinfo
+
+# Variables d'environnement (ne pas versionner les secrets)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tests & couverture
+coverage/
+.nyc_output/
+
+# Cache & outils
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+.eslintcache
+*.local
+
+# Prisma (moteur généré localement si applicable)
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Uploads / fichiers temporaires
+uploads/
+tmp/
+temp/
+*.tmp
+
+# IDE & éditeurs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Flutter / mobile (complète mobile/.gitignore)
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+mobile/**/ios/Pods/
+mobile/**/ios/.symlinks/
+mobile/**/ios/Flutter/Flutter.framework
+mobile/**/ios/Flutter/Flutter.podspec
+mobile/**/android/.gradle/
+mobile/**/android/local.properties
+mobile/**/android/**/gradle-wrapper.jar
+mobile/**/android/captures/
+mobile/**/android/gradlew
+mobile/**/android/gradlew.bat
+mobile/**/android/key.properties
+*.jks
+*.keystore
+
+# Certificats & clés
+*.pem
+*.key
+*.p12
+
+# Archives & binaires lourds (optionnel)
+*.zip
+*.tar.gz
+
+# Maquettes / prototypes design (racine uniquement)
+/design-canvas.jsx
+/data.jsx
+/icons.jsx
+/mobile.jsx
+/shell.jsx
+/tweaks-panel.jsx
+/screen-*.jsx
+/styles.css
+/DevisPro Benin.html
+
+# Cursor / agents locaux
+.cursor/
+.claude/

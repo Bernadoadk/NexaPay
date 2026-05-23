@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    background-color: #FAFAF7;
+    color: #14201C;
+  }
+  html.dark, html.dark body {
+    background-color: #0F1412;
+    color: #E8EAE9;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; color: inherit; }
+}
+
+/* ── Dark mode — surcharge des classes Tailwind ─────────────────────────── */
+/*
+ * Important : on doit redéclarer chaque variante interactive (hover, focus,
+ * group-hover, active) — sinon Tailwind applique la couleur LIGHT au survol,
+ * ce qui produit "fond blanc + texte blanc" en thème sombre.
+ */
+
+/* Backgrounds — états statiques + interactifs */
+.dark .bg-bg,
+.dark .hover\:bg-bg:hover,
+.dark .focus\:bg-bg:focus,
+.dark .group:hover .group-hover\:bg-bg     { background-color: #0F1412; }
+
+.dark .bg-surface,
+.dark .hover\:bg-surface:hover,
+.dark .focus\:bg-surface:focus,
+.dark .group:hover .group-hover\:bg-surface { background-color: #1A201E; }
+
+/* surface-2 statique = légèrement plus sombre que surface (#1A201E),
+   pour les rangs alternés / fonds subtils. */
+.dark .bg-surface-2 { background-color: #131918; }
+/* …mais au SURVOL on l'éclaircit pour que le hover soit visible
+   par-dessus surface (sinon survol invisible en thème sombre). */
+.dark .hover\:bg-surface-2:hover,
+.dark .focus\:bg-surface-2:focus,
+.dark .active\:bg-surface-2:active,
+.dark .group:hover .group-hover\:bg-surface-2 { background-color: #232a28; }
+
+.dark .bg-primary-soft,
+.dark .hover\:bg-primary-soft:hover,
+.dark .focus\:bg-primary-soft:focus,
+.dark .group:hover .group-hover\:bg-primary-soft { background-color: #0F2E22; }
+
+.dark .bg-primary-soft-2,
+.dark .hover\:bg-primary-soft-2:hover { background-color: #143D2B; }
+
+.dark .bg-danger-soft,
+.dark .hover\:bg-danger-soft:hover { background-color: #3D1515; }
+
+.dark .bg-blue-soft,
+.dark .hover\:bg-blue-soft:hover { background-color: #1E3A5F; }
+
+.dark .bg-warn-soft,
+.dark .hover\:bg-warn-soft:hover { background-color: #431A07; }
+
+/* Borders */
+.dark .border-border,
+.dark .hover\:border-border:hover         { border-color: #2A302E; }
+.dark .border-border-strong,
+.dark .hover\:border-border-strong:hover  { border-color: #384442; }
+.dark .border-primary,
+.dark .hover\:border-primary:hover        { border-color: #0F8F65; }
+.dark .border-danger { border-color: #F87171; }
+.dark .divide-border > * + * { border-color: #2A302E; }
+
+/* Text — états statiques + interactifs */
+.dark .text-text,
+.dark .hover\:text-text:hover,
+.dark .group:hover .group-hover\:text-text  { color: #E8EAE9; }
+
+.dark .text-text-muted,
+.dark .hover\:text-text-muted:hover         { color: #8A9490; }
+
+.dark .text-text-subtle { color: #5A6560; }
+.dark .text-danger      { color: #F87171; }
+.dark .text-blue        { color: #60A5FA; }
+.dark .text-warn        { color: #FB923C; }
+
+.dark .text-primary,
+.dark .hover\:text-primary:hover            { color: #12A875; }
+.dark .text-primary-hover,
+.dark .hover\:text-primary-hover:hover      { color: #12A875; }
+
+/* Form elements */
+.dark input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: #1A201E;
+  color: #E8EAE9;
+  border-color: #2A302E;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #5A6560; }
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus { border-color: #0F8F65; }
+
+/* Scrollbar */
+.dark .scrollbar-thin::-webkit-scrollbar-thumb { background: #384442; }
+
+/* Boutons hover spécifiques (Button.tsx ghost/secondary)
+ * Le base 'transition-colors' applique surface-2 au survol — déjà traité ci-dessus.
+ * Ici on s'assure que le texte reste lisible quand un hover transparent
+ * laisse passer un fond clair derrière. */
+.dark button.bg-surface:hover { background-color: #232a28; }
+.dark button.bg-transparent:hover { background-color: #232a28; }
+
+@layer utilities {
+  .font-num { font-feature-settings: "tnum"; letter-spacing: -0.01em; }
+  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #D9D6CB; border-radius: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .tracking-tight-num { letter-spacing: -0.02em; }
+}

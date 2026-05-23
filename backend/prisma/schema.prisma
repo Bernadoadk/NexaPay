@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?
+  name          String
+  companyName   String?
+  phone         String?
+  address       String?
+  ifu           String?
+  rccm          String?
+  logoUrl               String?
+  logoPublicId          String?
+  quoteLogoUrl          String?
+  quoteLogoPublicId     String?
+  useProfilePhotoAsLogo Boolean   @default(true)
+  plan          Plan      @default(FREE)
+  planExpiresAt DateTime?
+  planInterval  String    @default("monthly")
+  aiCredits     Int       @default(0)
+  aiCreditsLastRenewedAt DateTime?
+  phoneCountry  String?   @default("bj")
+  isEmailVerified Boolean @default(false)
+  authProvider  String    @default("email")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  clients            Client[]
+  quotes             Quote[]
+  products           Product[]
+  payments           Payment[]
+  otpCodes           OtpCode[]
+  creditTransactions CreditTransaction[]
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Int
+  type        String   // "signup_bonus" | "plan_renewal" | "purchase" | "ai_use"
+  description String
+  balanceAfter Int
+  createdAt   DateTime @default(now())
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Client {
+  id           String   @id @default(cuid())
+  name         String
+  contact      String?
+  email        String?
+  phone        String?
+  phoneCountry String?  @default("bj")
+  city         String?
+  address      String?
+  ifu          String?
+  color        String   @default("#0F8F65")
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quotes       Quote[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Quote {
+  id          String      @id @default(cuid())
+  number      String
+  title       String
+  status      QuoteStatus @default(DRAFT)
+  notes       String?
+  taxRate     Float       @default(18)
+  discount    Float       @default(0)
+  subtotal    Float       @default(0)
+  taxAmount   Float       @default(0)
+  total       Float       @default(0)
+  issuedAt    DateTime    @default(now())
+  validDays   Int         @default(30)
+  sentAt      DateTime?
+  paidAt      DateTime?
+  paymentRef  String?
+  paymentUrl  String?
+  paidViaLink Boolean     @default(false)
+  clientId    String
+  client      Client      @relation(fields: [clientId], references: [id])
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       QuoteItem[]
+  payment     Payment?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([number, userId])
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float    @default(0)
+  total       Float    @default(0)
+  unit        String?
+  order       Int      @default(0)
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String?
+  price       Float    @default(0)
+  unit        String?
+  archived    Boolean  @default(false)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       QuoteItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, archived])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  quoteId       String        @unique
+  quote         Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  grossAmount   Float
+  commission    Float
+  netAmount     Float
+  status        PaymentStatus @default(PENDING)
+  fedapayTxId   String?
+  transferId    String?
+  transferredAt DateTime?
+  failReason    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  TRANSFERRING
+  TRANSFERRED
+  FAILED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum Plan {
+  FREE
+  PRO
+  BUSINESS
+}
