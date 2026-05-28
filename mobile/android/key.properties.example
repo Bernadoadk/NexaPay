@@ -1,0 +1,5 @@
+# Copier vers key.properties (ne jamais committer key.properties ni le .jks)
+storePassword=VOTRE_MOT_DE_PASSE_KEYSTORE
+keyPassword=VOTRE_MOT_DE_PASSE_KEY
+keyAlias=upload
+storeFile=../upload-keystore.jks

@@ -1,4 +1,4 @@
-package com.example.devisprobenin
+package com.nexapay.app
 
 import io.flutter.embedding.android.FlutterActivity
 

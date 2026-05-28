@@ -3,39 +3,32 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
-  // ───────────────────────────────────────────────────────────────
-  // Choix automatique de l'URL d'API selon la cible :
-  //   • Web local (flutter run -d chrome, en mode debug) → backend local
-  //   • Émulateur Android                                → 10.0.2.2 (host local depuis l'AVD)
-  //   • Web buildé / appareil réel / release            → URL publique (ngrok ou prod)
-  //
-  // Pour basculer rapidement, surcharge `--dart-define=API_URL=...` :
-  //   flutter run -d chrome --dart-define=API_URL=https://moi.ngrok-free.app/api
-  // ───────────────────────────────────────────────────────────────
-  static const String _localWebUrl   = 'http://localhost:3001/api';
-  static const String _emulatorUrl   = 'http://10.0.2.2:3001/api';
-  static const String _ngrokUrl      = 'https://e50c-137-255-127-158.ngrok-free.app/api';
-  // Override possible au build / au lancement.
-  static const String _overrideUrl   = String.fromEnvironment('API_URL', defaultValue: '');
+  // ── URLs API ──────────────────────────────────────────────────
+  // Prod : API Vercel (release + appareil réel en prod)
+  static const String _prodUrl = 'https://nexapay-api.vercel.app/api';
+  // Dev local
+  static const String _localWebUrl = 'http://localhost:3001/api';
+  static const String _emulatorUrl = 'http://10.0.2.2:3001/api';
+  // Override au build : --dart-define=API_URL=https://...
+  static const String _overrideUrl = String.fromEnvironment('API_URL', defaultValue: '');
 
   static String get baseUrl {
     if (_overrideUrl.isNotEmpty) return _overrideUrl;
-    if (kIsWeb)     return kDebugMode ? _localWebUrl : _ngrokUrl;
+    // Release (APK/AAB Play Store) → toujours la prod
+    if (kReleaseMode) return _prodUrl;
+    // Debug web
+    if (kIsWeb) return _localWebUrl;
+    // Debug émulateur Android
     return _emulatorUrl;
   }
 
   static final Dio _dio = Dio(BaseOptions(
     baseUrl: baseUrl,
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 15),
-    headers: {
-      'Content-Type': 'application/json',
-      // Bypass de l'avertissement Ngrok — sans effet si la cible est localhost.
-      'ngrok-skip-browser-warning': 'true',
-    },
+    connectTimeout: const Duration(seconds: 30),
+    receiveTimeout: const Duration(seconds: 60),
+    headers: {'Content-Type': 'application/json'},
   ));
 
-  // Sur le web, on stocke le token en mémoire (pas de secure storage)
   static String? _memToken;
 
   static const _storage = FlutterSecureStorage(
