@@ -10,8 +10,21 @@
   const storeDialog = document.querySelector("[data-store-dialog]");
   const storeTriggers = document.querySelectorAll("[data-store-modal]");
   const storeClosers = document.querySelectorAll("[data-store-close]");
+  const scrollLinks = document.querySelectorAll("[data-scroll]");
   const year = document.querySelector("[data-year]");
   let lastFocused = null;
+
+  if (window.location.pathname.endsWith("/index.html")) {
+    window.history.replaceState(null, "", "/");
+  } else if (window.location.pathname.endsWith(".html")) {
+    window.history.replaceState(null, "", window.location.pathname.replace(/\.html$/, ""));
+  }
+
+  if (window.location.hash) {
+    const targetFromHash = window.location.hash.slice(1);
+    sessionStorage.setItem("nexapay-scroll-target", targetFromHash);
+    window.history.replaceState(null, "", window.location.pathname);
+  }
 
   root.dataset.theme = initialTheme;
   if (year) year.textContent = String(new Date().getFullYear());
@@ -47,6 +60,20 @@
     }
   }
 
+  function isHomePage() {
+    return window.location.pathname === "/" || window.location.pathname.endsWith("/index.html");
+  }
+
+  function scrollToTarget(target) {
+    if (!target) return;
+    if (target === "accueil") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const el = document.getElementById(target);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   window.addEventListener("scroll", syncHeader, { passive: true });
   syncHeader();
 
@@ -68,6 +95,29 @@
 
     menu.querySelectorAll("a").forEach(function (link) {
       link.addEventListener("click", closeMenu);
+    });
+  }
+
+  scrollLinks.forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      const target = link.getAttribute("data-scroll");
+      if (!target) return;
+      event.preventDefault();
+      closeMenu();
+      if (isHomePage()) {
+        scrollToTarget(target);
+      } else {
+        sessionStorage.setItem("nexapay-scroll-target", target);
+        window.location.href = "/";
+      }
+    });
+  });
+
+  const pendingTarget = sessionStorage.getItem("nexapay-scroll-target");
+  if (pendingTarget && isHomePage()) {
+    sessionStorage.removeItem("nexapay-scroll-target");
+    window.requestAnimationFrame(function () {
+      scrollToTarget(pendingTarget);
     });
   }
 
