@@ -7,6 +7,7 @@ import { authApi } from '@/lib/api';
 import { useEntrance } from '@/hooks/useAnime';
 import { useTheme } from '@/contexts/ThemeContext';
 import PhoneCountryInput from '@/components/ui/PhoneCountryInput';
+import AppleComingSoonDialog from '@/components/auth/AppleComingSoonDialog';
 import { toE164 } from '@/lib/phone';
 import logoSrc from '@/assets/Logo.png';
 import logoDarkSrc from '@/assets/Logo-dark.png';
@@ -17,19 +18,6 @@ interface FormData {
   companyName: string;
   email: string;
   password: string;
-}
-
-// Apple's SDK is loaded globally by the host page (same as Login). Declared
-// inline here too so TS doesn't complain when we touch `window.AppleID`.
-declare global {
-  interface Window {
-    AppleID?: {
-      auth: {
-        init: (config: object) => void;
-        signIn: () => Promise<{ authorization: { id_token: string }; user?: { name?: { firstName?: string; lastName?: string }; email?: string } }>;
-      };
-    };
-  }
 }
 
 const steps = [
@@ -45,17 +33,19 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [phoneCountry, setPhoneCountry] = useState('bj');
+  const [appleDialogOpen, setAppleDialogOpen] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const { register, handleSubmit, formState: { isSubmitting } } = useForm<FormData>();
 
   // Social signups never include a phone number — `App.tsx` routes the user
   // to `/onboarding` automatically when `user.phone` is missing.
   const googleLogin = useGoogleLogin({
+    scope: 'openid email profile',
     onSuccess: async (tokenResponse) => {
       setSocialLoading('google');
       setError('');
       try {
-        const res = await authApi.googleAuth({ idToken: tokenResponse.access_token });
+        const res = await authApi.googleAuth({ idToken: tokenResponse.access_token, mode: 'register' });
         login(res.data.token, res.data.user);
         navigate('/');
       } catch (e: any) {
@@ -70,34 +60,9 @@ export default function Register() {
     },
   });
 
-  async function handleAppleSignup() {
-    if (!window.AppleID) {
-      setError('Apple Sign-In non disponible');
-      return;
-    }
-    setSocialLoading('apple');
+  function handleAppleSignup() {
     setError('');
-    try {
-      window.AppleID.auth.init({
-        clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
-        scope: 'name email',
-        redirectURI: window.location.origin,
-        usePopup: true,
-      });
-      const response = await window.AppleID.auth.signIn();
-      const res = await authApi.appleAuth({
-        identityToken: response.authorization.id_token,
-        user: response.user,
-      });
-      login(res.data.token, res.data.user);
-      navigate('/');
-    } catch (e: any) {
-      if (e?.error !== 'popup_closed_by_user') {
-        setError(e?.response?.data?.message || 'Erreur Apple');
-      }
-    } finally {
-      setSocialLoading(null);
-    }
+    setAppleDialogOpen(true);
   }
 
   const { isDark } = useTheme();
@@ -130,6 +95,8 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex bg-bg">
+      <AppleComingSoonDialog open={appleDialogOpen} onClose={() => setAppleDialogOpen(false)} />
+
       {/* Panneau gauche — branding */}
       <div
         ref={leftRef}
@@ -221,13 +188,9 @@ export default function Register() {
               disabled={socialLoading !== null || isSubmitting}
               className="h-11 flex items-center justify-center gap-3 rounded-xl border border-border-strong bg-surface hover:bg-bg-subtle active:scale-[0.98] transition-all text-[14px] font-medium text-text disabled:opacity-60"
             >
-              {socialLoading === 'apple' ? (
-                <span className="w-4 h-4 rounded-full border-2 border-text-muted border-t-transparent animate-spin" />
-              ) : (
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-                </svg>
-              )}
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+              </svg>
               Continuer avec Apple
             </button>
           </div>

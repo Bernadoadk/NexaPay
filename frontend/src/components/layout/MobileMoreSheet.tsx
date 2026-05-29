@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { creditsApi } from '@/lib/api';
 import Avatar from '@/components/ui/Avatar';
+import PwaInstallSheet from './PwaInstallSheet';
 import {
-  ReceiptIcon, SettingsIcon, WalletIcon, LogOutIcon, XIcon, ChevronRightIcon,
+  DownloadIcon, ReceiptIcon, SettingsIcon, WalletIcon, LogOutIcon, XIcon, ChevronRightIcon,
 } from '@/components/ui/Icon';
 
 const PLAN_LABELS: Record<string, string> = { FREE: 'Gratuit', PRO: 'Pro', BUSINESS: 'Business' };
@@ -22,6 +23,7 @@ interface Props {
 export default function MobileMoreSheet({ open, onClose }: Props) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [installOpen, setInstallOpen] = useState(false);
 
   // Lock body scroll behind the sheet
   useEffect(() => {
@@ -54,18 +56,24 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
     setTimeout(() => navigate(path), 100); // let the sheet close before navigating
   }
 
+  function openInstallSheet() {
+    onClose();
+    setTimeout(() => setInstallOpen(true), 100);
+  }
+
   return (
-    <div
-      className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-200 ${
-        open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-      }`}
-    >
-      {/* Backdrop */}
+    <>
       <div
-        className="absolute inset-0 bg-text/40"
-        onClick={onClose}
-        aria-hidden
-      />
+        className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-200 ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-text/40"
+          onClick={onClose}
+          aria-hidden
+        />
 
       {/* Sheet */}
       <div
@@ -136,6 +144,12 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
             onClick={() => go('/settings')}
           />
           <MoreItem
+            label="Installer l'application"
+            hint="Ajouter sur l'ecran d'accueil"
+            icon={<DownloadIcon size={18} />}
+            onClick={openInstallSheet}
+          />
+          <MoreItem
             label="Produits & services"
             hint="Catalogue réutilisable"
             icon={<ReceiptIcon size={18} />}
@@ -171,7 +185,9 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
         {/* Safe area on iOS */}
         <div className="h-[20px]" />
       </div>
-    </div>
+      </div>
+      <PwaInstallSheet open={installOpen} onClose={() => setInstallOpen(false)} />
+    </>
   );
 }
 

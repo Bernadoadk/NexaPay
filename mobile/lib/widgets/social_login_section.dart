@@ -90,6 +90,104 @@ class _SocialButton extends StatelessWidget {
   }
 }
 
+Future<void> showAppleComingSoonDialog(BuildContext context) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: context.appSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: context.appBorder),
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.apple_rounded,
+                  color: AppColors.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Disponible bientôt',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Connexion Apple en préparation',
+                      style: TextStyle(
+                        color: context.appText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Cette option sera activée dès que le compte développeur Apple sera prêt. '
+            'Pour le moment, utilisez Google ou votre adresse e-mail.',
+            style: TextStyle(
+              color: context.appTextMuted,
+              fontSize: 13.5,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          height: 46,
+          child: ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: const Text(
+              'Compris',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Real Google "G" logo (4-color). Same SVG paths shipped by Google for
 /// "Sign in with Google" branding, identical to the web frontend.
 class _GoogleIcon extends StatelessWidget {

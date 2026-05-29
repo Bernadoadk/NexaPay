@@ -10,6 +10,15 @@ const api = axios.create({
   timeout: 60000,
 });
 
+const authRequestsThatHandleErrorsLocally = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/google',
+  '/auth/apple',
+  '/auth/verify-email',
+  '/auth/resend-otp',
+];
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -19,7 +28,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
+    const url = err.config?.url || '';
+    const handlesOwnAuthError = authRequestsThatHandleErrorsLocally.some(path => url.startsWith(path));
+    if (err.response?.status === 401 && !handlesOwnAuthError) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -34,7 +45,7 @@ export const authApi = {
     api.post('/auth/register', data),
   verifyEmail: (data: { email: string; code: string }) => api.post('/auth/verify-email', data),
   resendOtp: (data: { email: string }) => api.post('/auth/resend-otp', data),
-  googleAuth: (data: { idToken: string }) => api.post('/auth/google', data),
+  googleAuth: (data: { idToken: string; mode?: 'login' | 'register' }) => api.post('/auth/google', data),
   appleAuth: (data: { identityToken: string; user?: { name?: { firstName?: string; lastName?: string }; email?: string } }) =>
     api.post('/auth/apple', data),
   me: () => api.get('/auth/me'),

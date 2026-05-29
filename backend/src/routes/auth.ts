@@ -13,6 +13,9 @@ import { toE164 } from '../utils/phone';
 const router = Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+type GoogleAuthMode = 'login' | 'register';
+type GoogleProfile = { email: string; name?: string };
+
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -27,6 +30,27 @@ async function createAndSendOtp(userId: string, email: string, name: string): Pr
   } catch (err) {
     console.error('[OTP] Envoi email échoué:', err);
     // Compte créé — l'utilisateur pourra demander un nouveau code (resend-otp)
+  }
+}
+
+async function getGoogleProfile(token: string): Promise<GoogleProfile> {
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email) throw new Error('Email Google manquant');
+    return { email: payload.email, name: payload.name };
+  } catch {
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Token Google invalide');
+
+    const profile = await response.json() as GoogleProfile;
+    if (!profile.email) throw new Error('Email Google manquant');
+    return { email: profile.email, name: profile.name };
   }
 }
 
@@ -185,18 +209,28 @@ router.post(
 // POST /auth/google
 router.post('/google', async (req, res): Promise<void> => {
   const { idToken } = req.body;
+  const mode = req.body.mode === 'login' || req.body.mode === 'register'
+    ? req.body.mode as GoogleAuthMode
+    : undefined;
   if (!idToken) { res.status(400).json({ message: 'Token Google manquant' }); return; }
 
   try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    if (!payload?.email) { res.status(400).json({ message: 'Token Google invalide' }); return; }
-
-    const { email, name, sub: googleId } = payload;
+    const { email, name } = await getGoogleProfile(idToken);
     let user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user && mode === 'login') {
+      res.status(404).json({
+        message: 'Aucun compte Google trouvé avec cette adresse. Créez d’abord un compte.',
+      });
+      return;
+    }
+
+    if (user && mode === 'register') {
+      res.status(409).json({
+        message: 'Un compte existe déjà avec cette adresse Google. Connectez-vous plutôt.',
+      });
+      return;
+    }
 
     if (user) {
       if (user.authProvider === 'email') {
@@ -230,7 +264,8 @@ router.post('/google', async (req, res): Promise<void> => {
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
     const { password: _, ...safeUser } = user;
     res.json({ token, user: safeUser });
-  } catch {
+  } catch (err) {
+    console.error('[Google Auth]', err);
     res.status(401).json({ message: 'Authentification Google échouée' });
   }
 });

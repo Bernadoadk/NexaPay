@@ -104,7 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   Future<void> _googleSignup() async {
     setState(() { _loading = true; _error = null; });
     try {
-      await context.read<AuthProvider>().loginWithGoogle();
+      await context.read<AuthProvider>().registerWithGoogle();
     } on DioException catch (e) {
       setState(() => _error = e.response?.data?['message'] ?? 'Erreur Google');
     } catch (_) {
@@ -115,16 +115,8 @@ class _RegisterScreenState extends State<RegisterScreen>
   }
 
   Future<void> _appleSignup() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      await context.read<AuthProvider>().loginWithApple();
-    } on DioException catch (e) {
-      setState(() => _error = e.response?.data?['message'] ?? 'Erreur Apple');
-    } catch (_) {
-      setState(() => _error = 'Inscription Apple impossible');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    setState(() => _error = null);
+    await showAppleComingSoonDialog(context);
   }
 
   @override

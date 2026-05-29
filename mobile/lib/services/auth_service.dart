@@ -41,7 +41,7 @@ class AuthService {
     await ApiClient.instance.post('/auth/resend-otp', data: {'email': email});
   }
 
-  static Future<Map<String, dynamic>> googleSignIn() async {
+  static Future<Map<String, dynamic>> googleSignIn({String mode = 'login'}) async {
     final account = await _googleSignIn.signIn();
     if (account == null) throw Exception('Connexion Google annulée');
 
@@ -49,7 +49,10 @@ class AuthService {
     final idToken = auth.idToken;
     if (idToken == null) throw Exception('Token Google introuvable');
 
-    final res = await ApiClient.instance.post('/auth/google', data: {'idToken': idToken});
+    final res = await ApiClient.instance.post('/auth/google', data: {
+      'idToken': idToken,
+      'mode': mode,
+    });
     return res.data;
   }
 

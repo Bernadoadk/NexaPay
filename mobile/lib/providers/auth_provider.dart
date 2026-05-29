@@ -75,7 +75,15 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> loginWithGoogle() async {
-    final data = await AuthService.googleSignIn();
+    final data = await AuthService.googleSignIn(mode: 'login');
+    await ApiClient.saveToken(data['token']);
+    _user = User.fromJson(data['user']);
+    _pendingEmail = null;
+    notifyListeners();
+  }
+
+  Future<void> registerWithGoogle() async {
+    final data = await AuthService.googleSignIn(mode: 'register');
     await ApiClient.saveToken(data['token']);
     _user = User.fromJson(data['user']);
     _pendingEmail = null;

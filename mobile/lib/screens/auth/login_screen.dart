@@ -101,17 +101,8 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _appleLogin() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      await context.read<AuthProvider>().loginWithApple();
-    } on DioException catch (e) {
-      setState(() => _error = e.response?.data?['message'] ?? 'Erreur Apple');
-    } catch (e) {
-      if (e.toString().contains('canceled') || e.toString().contains('AuthorizationErrorCode.canceled')) return;
-      setState(() => _error = 'Connexion Apple impossible');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    setState(() => _error = null);
+    await showAppleComingSoonDialog(context);
   }
 
   @override
