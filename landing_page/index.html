@@ -4,17 +4,103 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="NexaPay aide les PME, startups et indépendants à créer des devis, suivre les paiements et encaisser via Mobile Money depuis un tableau de bord simple.">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="author" content="NexaPay">
     <meta name="theme-color" content="#0F1412">
+    <meta property="og:locale" content="fr_BJ">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="NexaPay">
+    <meta property="og:title" content="NexaPay - Devis, factures et paiements">
+    <meta property="og:description" content="Créez des devis professionnels, envoyez des liens de paiement Mobile Money ou carte, puis suivez vos revenus depuis un tableau de bord simple.">
+    <meta property="og:url" content="https://nexapay-page.vercel.app/">
+    <meta property="og:image" content="https://nexapay-page.vercel.app/assets/image.png">
+    <meta property="og:image:alt" content="Capture du tableau de bord NexaPay">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NexaPay - Devis, factures et paiements">
+    <meta name="twitter:description" content="Gestion de devis, factures et paiements pour PME, startups et indépendants.">
+    <meta name="twitter:image" content="https://nexapay-page.vercel.app/assets/image.png">
     <title>NexaPay - Devis, factures et paiements</title>
-    <link rel="icon" type="image/png" href="assets/fav.png">
-    <link rel="preload" as="image" href="assets/image.png">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="canonical" href="https://nexapay-page.vercel.app/">
+    <link rel="icon" type="image/png" href="/assets/fav.png">
+    <link rel="apple-touch-icon" href="/assets/fav.png">
+    <link rel="preload" as="image" href="/assets/image.png">
+    <link rel="stylesheet" href="/styles.css">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://nexapay-page.vercel.app/#organization",
+            "name": "NexaPay",
+            "url": "https://nexapay-page.vercel.app/",
+            "logo": "https://nexapay-page.vercel.app/assets/Logo.png",
+            "email": "adikpetobernado@gmail.com"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://nexapay-page.vercel.app/#website",
+            "name": "NexaPay",
+            "url": "https://nexapay-page.vercel.app/",
+            "publisher": { "@id": "https://nexapay-page.vercel.app/#organization" },
+            "inLanguage": "fr-BJ"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://nexapay-page.vercel.app/#software",
+            "name": "NexaPay",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "url": "https://nexapay-three.vercel.app/",
+            "description": "Solution de gestion de devis, factures et paiements Mobile Money pour PME, startups et indépendants."
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://nexapay-page.vercel.app/#faq-schema",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "NexaPay est-il facile à utiliser sans expertise comptable ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. L'interface est construite autour d'actions simples: créer un client, ajouter des produits, générer un devis, envoyer un lien et suivre le paiement."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Puis-je personnaliser mes devis ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. Vous pouvez utiliser les informations de votre entreprise, vos produits et vos conditions pour produire des documents cohérents avec votre activité."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Comment les paiements sont-ils suivis ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Chaque devis garde un statut. Quand un paiement est initié ou confirmé, le tableau de bord et l'espace paiements vous aident à suivre le montant et le reversement."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "NexaPay convient-il aux petites équipes ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. La solution vise les PME, startups et indépendants qui veulent une gestion commerciale claire sans mettre en place un outil lourd."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <header class="site-header" data-header>
       <a class="brand" href="/" data-scroll="accueil" aria-label="Retour à l'accueil NexaPay">
-        <img class="brand-logo logo-light" src="assets/Logo.png" alt="NexaPay">
-        <img class="brand-logo logo-dark" src="assets/Logo-dark.png" alt="NexaPay">
+        <img class="brand-logo logo-light" src="/assets/Logo.png" alt="NexaPay">
+        <img class="brand-logo logo-dark" src="/assets/Logo-dark.png" alt="NexaPay">
       </a>
 
       <nav class="desktop-nav" aria-label="Navigation principale">
@@ -167,7 +253,7 @@
             </ul>
           </div>
           <figure class="dashboard-shot reveal">
-            <img src="assets/image.png" alt="Capture du tableau de bord NexaPay" loading="lazy">
+            <img src="/assets/image.png" alt="Capture du tableau de bord NexaPay" loading="lazy">
           </figure>
         </div>
       </section>
@@ -272,8 +358,8 @@
     <footer class="site-footer">
       <div class="container footer-grid">
         <div>
-          <img class="footer-logo logo-light" src="assets/Logo.png" alt="NexaPay">
-          <img class="footer-logo logo-dark" src="assets/Logo-dark.png" alt="NexaPay">
+          <img class="footer-logo logo-light" src="/assets/Logo.png" alt="NexaPay">
+          <img class="footer-logo logo-dark" src="/assets/Logo-dark.png" alt="NexaPay">
           <p>Gestion de devis, factures et paiements pour les entreprises modernes au Bénin et au-delà.</p>
         </div>
         <nav aria-label="Liens utiles">
@@ -314,6 +400,6 @@
       </section>
     </div>
 
-    <script src="script.js"></script>
+    <script src="/script.js"></script>
   </body>
 </html>
