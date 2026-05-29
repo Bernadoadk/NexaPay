@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="NexaPay aide les PME, startups et indépendants à créer des devis, suivre les paiements et encaisser via Mobile Money depuis un tableau de bord simple.">
+    <meta name="theme-color" content="#0F1412">
+    <title>NexaPay - Devis, factures et paiements</title>
+    <link rel="icon" type="image/png" href="assets/fav.png">
+    <link rel="preload" as="image" href="assets/image.png">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header" data-header>
+      <a class="brand" href="#accueil" aria-label="Retour à l'accueil NexaPay">
+        <img class="brand-logo logo-light" src="assets/Logo.png" alt="NexaPay">
+        <img class="brand-logo logo-dark" src="assets/Logo-dark.png" alt="NexaPay">
+      </a>
+
+      <nav class="desktop-nav" aria-label="Navigation principale">
+        <a href="#accueil">Accueil</a>
+        <a href="#caracteristiques">Caractéristiques</a>
+        <a href="#cible">Cible</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contactez-nous</a>
+      </nav>
+
+      <div class="header-actions">
+        <button class="icon-button" type="button" data-theme-toggle aria-label="Changer de thème">
+          <span class="theme-icon theme-icon-sun" aria-hidden="true"></span>
+          <span class="theme-icon theme-icon-moon" aria-hidden="true"></span>
+        </button>
+        <a class="button button-primary header-login" href="https://nexapay-three.vercel.app/">Connexion</a>
+        <button class="menu-button" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+
+      <nav class="mobile-nav" id="mobile-menu" data-mobile-menu aria-label="Navigation mobile">
+        <a href="#accueil">Accueil</a>
+        <a href="#caracteristiques">Caractéristiques</a>
+        <a href="#cible">Cible</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contactez-nous</a>
+        <a href="https://nexapay-three.vercel.app/">Connexion</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" id="accueil" aria-labelledby="hero-title">
+        <div class="hero-media" aria-hidden="true"></div>
+        <div class="container hero-content">
+          <p class="eyebrow reveal">Devis. Factures. Paiements.</p>
+          <h1 id="hero-title" class="reveal">NexaPay transforme vos devis en paiements suivis, simples et rapides.</h1>
+          <p class="hero-copy reveal">
+            Créez des devis professionnels, envoyez un lien de paiement Mobile Money ou carte, puis suivez revenus, clients et relances depuis un tableau de bord clair.
+          </p>
+          <div class="hero-actions reveal">
+            <a class="button button-primary button-large" href="https://nexapay-three.vercel.app/register">Commencer maintenant</a>
+            <a class="button button-glass button-large" href="#caracteristiques">Voir les fonctionnalités</a>
+          </div>
+          <div class="store-actions reveal" aria-label="Téléchargement mobile">
+            <button class="store-button" type="button" data-store-modal>
+              <span class="store-icon" aria-hidden="true">▶</span>
+              <span>
+                <small>Disponible sur</small>
+                Google Play
+              </span>
+            </button>
+            <button class="store-button" type="button" data-store-modal>
+              <span class="store-icon" aria-hidden="true"></span>
+              <span>
+                <small>Télécharger dans</small>
+                l'App Store
+              </span>
+            </button>
+          </div>
+          <dl class="hero-metrics reveal" aria-label="Indicateurs produit">
+            <div>
+              <dt>97%</dt>
+              <dd>reversés après commission</dd>
+            </div>
+            <div>
+              <dt>3%</dt>
+              <dd>commission claire</dd>
+            </div>
+            <div>
+              <dt>24/7</dt>
+              <dd>liens de paiement actifs</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="section intro-strip" aria-label="Résumé NexaPay">
+        <div class="container strip-grid reveal">
+          <div>
+            <span class="mini-label">Pensé pour l'action</span>
+            <strong>Tout le cycle commercial dans un seul espace.</strong>
+          </div>
+          <p>Clients, produits, devis, paiements et reversements restent lisibles, même quand l'activité accélère.</p>
+        </div>
+      </section>
+
+      <section class="section" id="caracteristiques" aria-labelledby="features-title">
+        <div class="container section-heading reveal">
+          <span class="mini-label">Caractéristiques</span>
+          <h2 id="features-title">Une gestion financière qui reste fluide au quotidien.</h2>
+          <p>NexaPay reprend les gestes essentiels d'une équipe commerciale et les rend plus rapides: créer, envoyer, encaisser, suivre.</p>
+        </div>
+
+        <div class="container feature-grid">
+          <article class="feature-card reveal">
+            <span class="card-icon" aria-hidden="true">+</span>
+            <h3>Devis professionnels</h3>
+            <p>Construisez des devis propres avec clients, produits, taxes, notes et conditions, puis exportez ou partagez le document en quelques secondes.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="card-icon card-icon-blue" aria-hidden="true">-></span>
+            <h3>Paiement intégré</h3>
+            <p>Envoyez un lien de paiement Mobile Money ou carte et gardez un statut clair sur chaque devis: envoyé, en attente, payé ou en retard.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="card-icon card-icon-warn" aria-hidden="true">%</span>
+            <h3>Reversements lisibles</h3>
+            <p>Suivez les montants encaissés, la commission NexaPay et le net reversé sur votre numéro Mobile Money depuis l'espace paiements.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="card-icon" aria-hidden="true">AI</span>
+            <h3>Assistance IA</h3>
+            <p>Gagnez du temps sur la rédaction et la structuration des devis grâce aux crédits IA intégrés à l'application.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="card-icon card-icon-blue" aria-hidden="true">#</span>
+            <h3>Catalogue produits</h3>
+            <p>Centralisez prestations, tarifs et descriptions pour produire des devis cohérents sans ressaisir les mêmes lignes.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="card-icon card-icon-warn" aria-hidden="true">[]</span>
+            <h3>Tableau de bord</h3>
+            <p>Visualisez revenus, clients actifs, devis récents et impayés avec les mêmes repères sobres que dans votre application.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section product-band" aria-labelledby="dashboard-title">
+        <div class="container dashboard-layout">
+          <div class="dashboard-copy reveal">
+            <span class="mini-label">Votre activité en temps réel</span>
+            <h2 id="dashboard-title">Un tableau de bord conçu pour décider vite.</h2>
+            <p>Les indicateurs utiles sont visibles sans bruit: chiffre d'affaires encaissé, devis envoyés, paiements en attente, derniers clients et actions rapides.</p>
+            <ul class="check-list">
+              <li>Vue claire des revenus mensuels.</li>
+              <li>Relances et statuts de paiement centralisés.</li>
+              <li>Expérience cohérente desktop et mobile.</li>
+            </ul>
+          </div>
+          <figure class="dashboard-shot reveal">
+            <img src="assets/image.png" alt="Capture du tableau de bord NexaPay" loading="lazy">
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="cible" aria-labelledby="audience-title">
+        <div class="container section-heading reveal">
+          <span class="mini-label">Cible</span>
+          <h2 id="audience-title">Pour les entreprises qui vendent vite et veulent encaisser proprement.</h2>
+        </div>
+
+        <div class="container audience-grid">
+          <article class="audience-card reveal">
+            <p class="audience-kicker">PME</p>
+            <h3>Gardez le controle commercial.</h3>
+            <p>Suivez les devis, les clients et les paiements sans multiplier feuilles Excel, captures WhatsApp et rappels manuels.</p>
+          </article>
+          <article class="audience-card reveal">
+            <p class="audience-kicker">Startups</p>
+            <h3>Structurez la vente des le debut.</h3>
+            <p>Installez une base propre pour facturer, encaisser et analyser les premiers revenus avec une équipe légère.</p>
+          </article>
+          <article class="audience-card reveal">
+            <p class="audience-kicker">Freelances</p>
+            <h3>Paraissez pro sans perdre du temps.</h3>
+            <p>Envoyez des devis beaux, gardez vos clients organisés et facilitez le paiement à distance.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section workflow-band" aria-labelledby="workflow-title">
+        <div class="container section-heading reveal">
+          <span class="mini-label">Flux simple</span>
+          <h2 id="workflow-title">Du devis au paiement, sans friction.</h2>
+        </div>
+        <div class="container workflow">
+          <div class="step reveal">
+            <span>01</span>
+            <h3>Créez</h3>
+            <p>Ajoutez client, produits, quantités, taxes et conditions.</p>
+          </div>
+          <div class="step reveal">
+            <span>02</span>
+            <h3>Envoyez</h3>
+            <p>Partagez le PDF ou le lien de paiement au client.</p>
+          </div>
+          <div class="step reveal">
+            <span>03</span>
+            <h3>Encaissez</h3>
+            <p>Le client paie par Mobile Money ou carte bancaire.</p>
+          </div>
+          <div class="step reveal">
+            <span>04</span>
+            <h3>Suivez</h3>
+            <p>Statuts, revenus et reversements restent synchronisés.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="faq" aria-labelledby="faq-title">
+        <div class="container faq-layout">
+          <div class="faq-copy reveal">
+            <span class="mini-label">FAQ</span>
+            <h2 id="faq-title">Questions fréquentes.</h2>
+            <p>Les réponses rapides pour comprendre comment NexaPay accompagne la facturation et les paiements.</p>
+          </div>
+          <div class="faq-list reveal">
+            <details open>
+              <summary>NexaPay est-il facile à utiliser sans expertise comptable ?</summary>
+              <p>Oui. L'interface est construite autour d'actions simples: créer un client, ajouter des produits, générer un devis, envoyer un lien et suivre le paiement.</p>
+            </details>
+            <details>
+              <summary>Puis-je personnaliser mes devis ?</summary>
+              <p>Oui. Vous pouvez utiliser les informations de votre entreprise, vos produits et vos conditions pour produire des documents cohérents avec votre activité.</p>
+            </details>
+            <details>
+              <summary>Comment les paiements sont-ils suivis ?</summary>
+              <p>Chaque devis garde un statut. Quand un paiement est initié ou confirmé, le tableau de bord et l'espace paiements vous aident à suivre le montant et le reversement.</p>
+            </details>
+            <details>
+              <summary>NexaPay convient-il aux petites équipes ?</summary>
+              <p>Oui. La solution vise les PME, startups et indépendants qui veulent une gestion commerciale claire sans mettre en place un outil lourd.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="section contact-band" id="contact" aria-labelledby="contact-title">
+        <div class="container contact-layout reveal">
+          <div>
+            <span class="mini-label">Contactez-nous</span>
+            <h2 id="contact-title">Prêt à simplifier vos devis et paiements ?</h2>
+            <p>Expliquez votre besoin, votre volume de devis ou votre configuration Mobile Money. Nous vous aiderons à démarrer proprement.</p>
+          </div>
+          <div class="contact-actions">
+            <a class="button button-primary button-large" href="mailto:adikpetobernado@gmail.com?subject=Demande%20NexaPay">Contactez-nous</a>
+            <a class="button button-secondary button-large" href="https://nexapay-three.vercel.app/register">Créer un compte</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-grid">
+        <div>
+          <img class="footer-logo logo-light" src="assets/Logo.png" alt="NexaPay">
+          <img class="footer-logo logo-dark" src="assets/Logo-dark.png" alt="NexaPay">
+          <p>Gestion de devis, factures et paiements pour les entreprises modernes au Bénin et au-delà.</p>
+        </div>
+        <nav aria-label="Liens utiles">
+          <a href="#caracteristiques">Caractéristiques</a>
+          <a href="#cible">Cible</a>
+          <a href="#faq">FAQ</a>
+          <a href="conditions-utilisation.html">Conditions d'utilisation</a>
+          <a href="politique-confidentialite.html">Politique de confidentialité</a>
+        </nav>
+      </div>
+      <div class="container footer-bottom">
+        <span>© <span data-year></span> NexaPay. Tous droits réservés.</span>
+        <span>Devis. Factures. Paiements.</span>
+      </div>
+    </footer>
+
+    <div class="store-modal" data-store-dialog hidden>
+      <div class="store-modal-backdrop" data-store-close></div>
+      <section class="store-modal-panel" role="dialog" aria-modal="true" aria-labelledby="store-modal-title">
+        <button class="modal-close" type="button" data-store-close aria-label="Fermer">×</button>
+        <span class="mini-label">Applications mobiles</span>
+        <h2 id="store-modal-title">Disponible très bientôt.</h2>
+        <p>
+          Les applications Google Play et App Store arrivent. En attendant, NexaPay fonctionne déjà comme une application installable depuis votre navigateur.
+        </p>
+        <div class="pwa-grid">
+          <article>
+            <h3>iPhone</h3>
+            <p>Ouvrez le site avec Safari, touchez le bouton Partager, puis choisissez Ajouter à l'écran d'accueil.</p>
+            <a class="button button-primary" href="https://nexapay-three.vercel.app/">Accéder via iPhone</a>
+          </article>
+          <article>
+            <h3>Android</h3>
+            <p>Ouvrez le site avec Chrome, touchez le menu du navigateur, puis choisissez Installer l'application ou Ajouter à l'écran d'accueil.</p>
+            <a class="button button-primary" href="https://nexapay-three.vercel.app/">Accéder via Android</a>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
