@@ -3,7 +3,7 @@ import { PDFViewer } from '@react-pdf/renderer';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Quote } from '@/types';
 import Button from '@/components/ui/Button';
-import { DownloadIcon } from '@/components/ui/Icon';
+import { DownloadIcon, EyeIcon } from '@/components/ui/Icon';
 import { X } from 'lucide-react';
 import {
   PDF_TEMPLATES,
@@ -34,6 +34,7 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
   const [downloading, setDownloading] = useState(false);
   const [logo, setLogo] = useState<string | null | undefined>(undefined);
   const [previewKey, setPreviewKey] = useState(0);
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
 
   useEffect(() => {
     const url = getEffectiveLogo(quote);
@@ -75,17 +76,31 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
 
   const selectedTmpl = PDF_TEMPLATES.find(t => t.id === selected) ?? PDF_TEMPLATES[0];
   const logoReady = logo !== undefined;
+  const preview = !logoReady ? (
+    <div className="flex flex-col items-center gap-3 text-text-muted">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-[13px]">Préparation de l'aperçu…</span>
+    </div>
+  ) : (
+    <PDFViewer
+      key={previewKey}
+      style={{ width: '100%', height: '100%', border: 'none' }}
+      showToolbar={false}
+    >
+      {selectedTmpl.document(quote, logo)}
+    </PDFViewer>
+  );
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-surface rounded-xl border border-border shadow-2xl w-full max-w-[1200px] h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-surface sm:rounded-xl border border-border shadow-2xl w-full max-w-[1200px] h-[100dvh] sm:h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
-          <div>
+        <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
+          <div className="min-w-0 pr-3">
             <div className="font-semibold text-[15px]">Choisir un template</div>
             <div className="text-[12px] text-text-muted mt-0.5">
               Sélectionnez un modèle qui reflète votre identité professionnelle
@@ -104,7 +119,7 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
         <div className="flex-1 flex min-h-0">
 
           {/* Colonne gauche : filtres + grille */}
-          <div className="w-[300px] flex-shrink-0 border-r border-border flex flex-col min-h-0">
+          <div className="w-full lg:w-[300px] flex-shrink-0 lg:border-r border-border flex flex-col min-h-0">
 
             {/* Chips de catégories */}
             <div className="px-4 pt-4 pb-3 flex-shrink-0">
@@ -135,7 +150,7 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
 
             {/* Grille des templates */}
             <div className="flex-1 overflow-y-auto px-4 pb-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 min-[420px]:grid-cols-3 lg:grid-cols-2 gap-3">
                 {filteredTemplates.map((tmpl) => {
                   const isSelected = selected === tmpl.id;
                   return (
@@ -175,21 +190,8 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
           </div>
 
           {/* Colonne droite : aperçu PDF */}
-          <div className="flex-1 bg-[#E8E8E8] flex items-center justify-center overflow-hidden relative">
-            {!logoReady ? (
-              <div className="flex flex-col items-center gap-3 text-text-muted">
-                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <span className="text-[13px]">Préparation de l'aperçu…</span>
-              </div>
-            ) : (
-              <PDFViewer
-                key={previewKey}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-                showToolbar={false}
-              >
-                {selectedTmpl.document(quote, logo)}
-              </PDFViewer>
-            )}
+          <div className="hidden lg:flex flex-1 bg-[#E8E8E8] items-center justify-center overflow-hidden relative">
+            {preview}
 
             {/* Badge template sélectionné */}
             {logoReady && (
@@ -203,13 +205,23 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between flex-shrink-0 bg-surface">
-          <div className="text-[12px] text-text-muted">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0 bg-surface pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:pb-4">
+          <div className="text-[12px] text-text-muted min-w-0">
             Modèle sélectionné :{' '}
             <span className="font-semibold text-text">{selectedTmpl.name}</span>
             <span className="ml-1 text-[11px] opacity-60 capitalize">({selectedTmpl.category})</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setMobilePreviewOpen(true)}
+              disabled={!logoReady}
+              className="lg:hidden flex-1"
+            >
+              <EyeIcon size={14} />
+              Aperçu
+            </Button>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={downloading}>
               Annuler
             </Button>
@@ -219,6 +231,7 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
               loading={downloading}
               disabled={!logoReady}
               onClick={handleDownload}
+              className="flex-1 sm:flex-none"
             >
               <DownloadIcon size={13} />
               Télécharger PDF
@@ -227,6 +240,48 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
         </div>
 
       </div>
+
+      {mobilePreviewOpen && (
+        <div className="fixed inset-0 z-[60] bg-[#E8E8E8] flex flex-col lg:hidden">
+          <div className="h-14 px-4 border-b border-border bg-surface flex items-center justify-between flex-shrink-0 pt-[env(safe-area-inset-top)] box-content">
+            <div className="min-w-0 leading-tight">
+              <div className="text-[14px] font-semibold text-text truncate">{selectedTmpl.name}</div>
+              <div className="text-[11px] text-text-muted capitalize">{selectedTmpl.category}</div>
+            </div>
+            <button
+              onClick={() => setMobilePreviewOpen(false)}
+              aria-label="Fermer l'aperçu"
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-2 text-text-muted"
+            >
+              <X size={17} strokeWidth={2} />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            {preview}
+          </div>
+          <div className="p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] bg-surface border-t border-border flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setMobilePreviewOpen(false)}
+              className="flex-1"
+            >
+              Fermer
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={downloading}
+              disabled={!logoReady}
+              onClick={handleDownload}
+              className="flex-1"
+            >
+              <DownloadIcon size={13} />
+              Télécharger
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -92,6 +92,20 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
     }
   }
 
+  void _openPreview() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _TemplatePreviewPage(
+          template: _selectedTemplate,
+          buildPreview: () => _getPreview(_selectedId),
+          onExport: _export,
+          generating: _generating,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenH = MediaQuery.of(context).size.height;
@@ -191,49 +205,78 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
           const SizedBox(height: 12),
           Divider(height: 1, color: context.appBorder),
 
-          // ── Preview PDF ──
-          Expanded(
-            flex: 5,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
             child: Container(
-              color: const Color(0xFFE8E8E8),
-              child: PdfPreview(
-                key: ValueKey(_selectedId),
-                build: (_) => _getPreview(_selectedId),
-                useActions: false,
-                canChangePageFormat: false,
-                canChangeOrientation: false,
-                canDebug: false,
-                allowPrinting: false,
-                allowSharing: false,
-                scrollViewDecoration: const BoxDecoration(color: Color(0xFFE8E8E8)),
-                pdfPreviewPageDecoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                loadingWidget: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(
-                        color: AppColors.primary,
-                        strokeWidth: 2.5,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Génération de l\'aperçu…',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: context.appSurface2,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: context.appBorder),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Modèle sélectionné',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.appTextMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                _selectedTemplate.name,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: context.appText,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                _selectedTemplate.category,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: _openPreview,
+                    icon: const Icon(Icons.visibility_outlined, size: 18),
+                    label: const Text('Aperçu'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -242,37 +285,16 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
 
           // ── Grille des templates ──
           Expanded(
-            flex: 4,
             child: Column(
               children: [
                 // Compteur + nom du template sélectionné
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
                   child: Row(
                     children: [
                       Text(
-                        _selectedTemplate.name,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _selectedTemplate.category,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        'Templates',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.appText),
                       ),
                       const Spacer(),
                       Text(
@@ -284,13 +306,12 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
                 ),
                 Expanded(
                   child: GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    scrollDirection: Axis.horizontal,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                      childAspectRatio: 0.72,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: MediaQuery.of(context).size.width < 380 ? 0.58 : 0.62,
                     ),
                     itemCount: _filtered.length,
                     itemBuilder: (_, i) {
@@ -363,6 +384,131 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TemplatePreviewPage extends StatelessWidget {
+  final QuoteTemplate template;
+  final Future<Uint8List> Function() buildPreview;
+  final Future<void> Function() onExport;
+  final bool generating;
+
+  const _TemplatePreviewPage({
+    required this.template,
+    required this.buildPreview,
+    required this.onExport,
+    required this.generating,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE8E8E8),
+      appBar: AppBar(
+        backgroundColor: context.appSurface,
+        foregroundColor: context.appText,
+        titleSpacing: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              template.name,
+              style: TextStyle(
+                color: context.appText,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              template.category,
+              style: TextStyle(
+                color: context.appTextMuted,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: PdfPreview(
+        key: ValueKey(template.id),
+        build: (_) => buildPreview(),
+        useActions: false,
+        canChangePageFormat: false,
+        canChangeOrientation: false,
+        canDebug: false,
+        allowPrinting: false,
+        allowSharing: false,
+        scrollViewDecoration: const BoxDecoration(color: Color(0xFFE8E8E8)),
+        pdfPreviewPageDecoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.18),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        loadingWidget: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                color: AppColors.primary,
+                strokeWidth: 2.5,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Génération de l\'aperçu…',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: BoxDecoration(
+            color: context.appSurface,
+            border: Border(top: BorderSide(color: context.appBorder)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: context.appText,
+                    side: BorderSide(color: context.appBorderStrong),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                  child: const Text('Fermer'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: generating ? null : onExport,
+                  icon: generating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                  label: Text(generating ? 'Génération…' : 'Exporter'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
