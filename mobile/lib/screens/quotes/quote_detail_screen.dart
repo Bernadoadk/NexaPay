@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme.dart';
 import '../../models/quote.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/quote_service.dart';
 import '../../services/payment_service.dart';
 import '../../widgets/avatar_widget.dart';
@@ -754,6 +756,9 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
   }
 
   Widget _buildActions(Quote q) {
+    final plan = context.watch<AuthProvider>().user?.plan ?? 'FREE';
+    final canUseMomo = plan == 'PRO' || plan == 'BUSINESS';
+
     return Container(
       padding: EdgeInsets.fromLTRB(
           18, 12, 18, MediaQuery.of(context).padding.bottom + 12),
@@ -811,7 +816,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               ),
             ],
           ),
-          if (q.status != QuoteStatus.paid && !q.isAwaitingPayment) ...[
+          if (canUseMomo && q.status != QuoteStatus.paid && !q.isAwaitingPayment) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,

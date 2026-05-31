@@ -33,6 +33,13 @@ const CATEGORIES: { id: TemplateCategory; label: string }[] = [
 
 export default function TemplateSelectorModal({ quote, onClose, mode = 'download', onSent }: Props) {
   const { user } = useAuth();
+  const isBusiness = user?.plan === 'BUSINESS';
+  const availableTemplates = isBusiness
+    ? PDF_TEMPLATES
+    : PDF_TEMPLATES.filter(t => t.category === 'classique');
+  const availableCategories = isBusiness
+    ? CATEGORIES
+    : CATEGORIES.filter(cat => cat.id === 'tous' || cat.id === 'classique');
   const [selected, setSelected] = useState<TemplateId>('classique');
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>('tous');
   const [downloading, setDownloading] = useState(false);
@@ -56,7 +63,7 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
   function handleSelectCategory(cat: TemplateCategory) {
     setActiveCategory(cat);
     // Si le template sélectionné n'est pas dans la nouvelle catégorie, sélectionner le premier visible
-    const filtered = cat === 'tous' ? PDF_TEMPLATES : PDF_TEMPLATES.filter(t => t.category === cat);
+    const filtered = cat === 'tous' ? availableTemplates : availableTemplates.filter(t => t.category === cat);
     if (filtered.length > 0 && !filtered.find(t => t.id === selected)) {
       handleSelectTemplate(filtered[0].id);
     }
@@ -106,10 +113,10 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
   }
 
   const filteredTemplates = activeCategory === 'tous'
-    ? PDF_TEMPLATES
-    : PDF_TEMPLATES.filter(t => t.category === activeCategory);
+    ? availableTemplates
+    : availableTemplates.filter(t => t.category === activeCategory);
 
-  const selectedTmpl = PDF_TEMPLATES.find(t => t.id === selected) ?? PDF_TEMPLATES[0];
+  const selectedTmpl = availableTemplates.find(t => t.id === selected) ?? availableTemplates[0];
   const logoReady = logo !== undefined;
   const preview = !logoReady ? (
     <div className="flex flex-col items-center gap-3 text-text-muted">
@@ -161,7 +168,7 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
             {/* Chips de catégories */}
             <div className="px-4 pt-4 pb-3 flex-shrink-0">
               <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map(cat => (
+                {availableCategories.map(cat => (
                   <button
                     key={cat.id}
                     onClick={() => handleSelectCategory(cat.id)}

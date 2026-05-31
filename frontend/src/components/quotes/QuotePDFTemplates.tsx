@@ -978,7 +978,10 @@ export async function downloadWithTemplate(quote: Quote, templateId: TemplateId,
 export async function generatePdfBlobWithTemplate(quote: Quote, templateId: TemplateId, userPlan?: string) {
   const effectiveLogoUrl = getEffectiveLogo(quote);
   const logo = effectiveLogoUrl ? await fetchLogoBase64(effectiveLogoUrl) : null;
-  const tmpl = PDF_TEMPLATES.find((t) => t.id === templateId) ?? PDF_TEMPLATES[0];
+  const allowedTemplates = userPlan === 'BUSINESS'
+    ? PDF_TEMPLATES
+    : PDF_TEMPLATES.filter(t => t.category === 'classique');
+  const tmpl = allowedTemplates.find((t) => t.id === templateId) ?? allowedTemplates[0];
   const showWatermark = !userPlan || userPlan === 'FREE';
   const doc = tmpl.document(quote, logo, showWatermark);
   return pdf(doc).toBlob();

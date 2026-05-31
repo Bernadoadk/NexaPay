@@ -48,13 +48,23 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
   // Cache des PDF générés pour ne pas re-générer à chaque tap
   final Map<String, Uint8List> _previewCache = {};
 
+  bool get _isBusiness => _currentPlan == 'BUSINESS';
+
+  List<QuoteTemplate> get _availableTemplates => _isBusiness
+      ? kQuoteTemplates
+      : kQuoteTemplates.where((t) => t.category == 'classique').toList();
+
+  List<(String, String)> get _availableCategories => _isBusiness
+      ? _categories
+      : _categories.where((c) => c.$1 == 'tous' || c.$1 == 'classique').toList();
+
   List<QuoteTemplate> get _filtered {
-    if (_activeCategory == 'tous') return kQuoteTemplates;
-    return kQuoteTemplates.where((t) => t.category == _activeCategory).toList();
+    if (_activeCategory == 'tous') return _availableTemplates;
+    return _availableTemplates.where((t) => t.category == _activeCategory).toList();
   }
 
   QuoteTemplate get _selectedTemplate =>
-      kQuoteTemplates.firstWhere((t) => t.id == _selectedId, orElse: () => kQuoteTemplates.first);
+      _availableTemplates.firstWhere((t) => t.id == _selectedId, orElse: () => _availableTemplates.first);
 
   String get _currentPlan =>
       context.read<AuthProvider>().user?.plan ?? 'FREE';
@@ -78,8 +88,8 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
       _activeCategory = cat;
       // Si le template sélectionné n'est pas dans la catégorie, prendre le premier
       final filtered = cat == 'tous'
-          ? kQuoteTemplates
-          : kQuoteTemplates.where((t) => t.category == cat).toList();
+          ? _availableTemplates
+          : _availableTemplates.where((t) => t.category == cat).toList();
       if (filtered.isNotEmpty && !filtered.any((t) => t.id == _selectedId)) {
         _selectedId = filtered.first.id;
       }
@@ -222,10 +232,10 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _categories.length,
+              itemCount: _availableCategories.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
-                final (id, label) = _categories[i];
+                final (id, label) = _availableCategories[i];
                 final active = id == _activeCategory;
                 return GestureDetector(
                   onTap: () => _selectCategory(id),

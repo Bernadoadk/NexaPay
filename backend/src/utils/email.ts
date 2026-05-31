@@ -8,7 +8,15 @@ type QuoteEmailData = {
   total: number;
   companyName: string;
   templateName?: string;
+  paymentUrl?: string;
   pdfBuffer: Buffer;
+};
+
+type AdminAlertData = {
+  subject: string;
+  title: string;
+  message: string;
+  details?: Record<string, unknown>;
 };
 
 const transporter = nodemailer.createTransport({
@@ -93,6 +101,18 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<void> {
   const templateLine = data.templateName
     ? `<p style="margin:0 0 14px;color:#6b7280;font-size:13px;">Modèle utilisé : <strong>${escapeHtml(data.templateName)}</strong></p>`
     : '';
+  const paymentButton = data.paymentUrl
+    ? `
+          <div style="margin:22px 0 18px;text-align:center;">
+            <a href="${escapeHtml(data.paymentUrl)}" style="display:inline-block;background:#0F8F65;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:13px 20px;border-radius:10px;">
+              Payer le devis
+            </a>
+          </div>
+          <p style="margin:0 0 18px;color:#6b7280;font-size:13px;line-height:1.5;text-align:center;">
+            Paiement sécurisé par Mobile Money ou carte bancaire.
+          </p>
+    `
+    : '';
 
   await transporter.sendMail({
     from: fromAddress(),
@@ -118,6 +138,7 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<void> {
             <div style="color:#166534;font-size:13px;margin-bottom:6px;">Montant total TTC</div>
             <div style="color:#14532d;font-size:24px;font-weight:700;">${fmtXof(data.total)}</div>
           </div>
+          ${paymentButton}
           ${templateLine}
           <p style="margin:0;color:#6b7280;font-size:14px;line-height:1.6;">
             Merci de votre confiance.
@@ -137,5 +158,29 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<void> {
       content: data.pdfBuffer,
       contentType: 'application/pdf',
     }],
+  });
+}
+
+export async function sendAdminAlertEmail(data: AdminAlertData): Promise<void> {
+  const details = data.details
+    ? `<pre style="white-space:pre-wrap;background:#f4f4f5;border-radius:10px;padding:12px;color:#374151;font-size:12px;">${escapeHtml(JSON.stringify(data.details, null, 2))}</pre>`
+    : '';
+
+  await transporter.sendMail({
+    from: fromAddress(),
+    to: 'adikpetobernado@gmail.com',
+    subject: data.subject,
+    html: `
+<!DOCTYPE html>
+<html lang="fr">
+<body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:24px;">
+    <h1 style="margin:0 0 12px;color:#111827;font-size:20px;">${escapeHtml(data.title)}</h1>
+    <p style="margin:0 0 16px;color:#4b5563;font-size:14px;line-height:1.6;">${escapeHtml(data.message)}</p>
+    ${details}
+  </div>
+</body>
+</html>
+    `,
   });
 }

@@ -656,9 +656,12 @@ class QuotePdfService {
     /// watermark at the bottom of the page (paid plans get a clean PDF).
     String plan = 'FREE',
   }) async {
-    final tmpl = kQuoteTemplates.firstWhere(
+    final allowedTemplates = plan == 'BUSINESS'
+        ? kQuoteTemplates
+        : kQuoteTemplates.where((t) => t.category == 'classique').toList();
+    final tmpl = allowedTemplates.firstWhere(
       (t) => t.id == templateId,
-      orElse: () => kQuoteTemplates.first,
+      orElse: () => allowedTemplates.first,
     );
 
     pw.ImageProvider? logo;

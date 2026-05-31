@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { maybeRenewCredits } from './credits';
+import { sendAdminAlertEmail } from '../utils/email';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
 const AI_COST = 1; // 1 crédit par appel IA
+let lastQuotaAlertAt = 0;
 
 class OpenAiError extends Error {
   code?: string;
@@ -73,18 +75,47 @@ function aiErrorMessage(err: any): string {
   const status: number = err?.status || 0;
 
   if (code === 'insufficient_quota' || /exceeded your current quota/i.test(raw)) {
-    return "Le service IA est temporairement indisponible (quota du fournisseur épuisé). Vos crédits n'ont pas été consommés — réessayez plus tard ou contactez le support.";
+    return "Bientôt disponible. Vos crédits n'ont pas été consommés.";
   }
   if (status === 429 || /rate limit/i.test(raw)) {
     return "Trop de demandes vers l'IA en ce moment. Réessayez dans quelques secondes — votre crédit a été restitué.";
   }
   if (code === 'no_api_key') {
-    return "IA non configurée — contactez le support.";
+    return "Bientôt disponible. Vos crédits n'ont pas été consommés.";
   }
   if (status >= 500) {
     return "Le service IA est momentanément indisponible. Votre crédit a été restitué — réessayez dans un instant.";
   }
   return `Erreur IA : ${raw}`;
+}
+
+function isAiProviderQuotaError(err: any): boolean {
+  const raw: string = err?.message || '';
+  const code: string = err?.code || '';
+  return code === 'insufficient_quota' || /exceeded your current quota/i.test(raw);
+}
+
+async function notifyAiQuotaIfNeeded(err: any, context: { action: string; userId?: string }) {
+  if (!isAiProviderQuotaError(err)) return;
+  const now = Date.now();
+  if (now - lastQuotaAlertAt < 15 * 60 * 1000) return;
+  lastQuotaAlertAt = now;
+
+  await sendAdminAlertEmail({
+    subject: 'NexaPay — quota OpenAI épuisé',
+    title: 'Quota fournisseur IA épuisé',
+    message: 'Une requête IA a échoué car le quota de la clé API semble épuisé.',
+    details: {
+      action: context.action,
+      userId: context.userId,
+      code: err?.code,
+      status: err?.status,
+      message: err?.message,
+      date: new Date().toISOString(),
+    },
+  }).catch((mailErr) => {
+    console.error('[AIQuotaAlert] Notification échouée:', mailErr?.message ?? mailErr);
+  });
 }
 
 async function deductCredit(userId: string, action: string): Promise<{ ok: boolean; remaining: number }> {
@@ -122,7 +153,14 @@ router.post('/generate-quote', authenticate, async (req: AuthRequest, res): Prom
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    res.status(503).json({ message: 'IA non configurée — ajoutez OPENAI_API_KEY dans .env', aiCredits: deduct.remaining });
+    const refunded = await refundCredit(req.userId!, 'Génération devis IA').catch(() => deduct.remaining);
+    await sendAdminAlertEmail({
+      subject: 'NexaPay — OPENAI_API_KEY manquante',
+      title: 'IA non configurée',
+      message: 'Une requête IA a été faite mais OPENAI_API_KEY est absente.',
+      details: { action: 'Génération devis IA', userId: req.userId, date: new Date().toISOString() },
+    }).catch(() => {});
+    res.status(503).json({ message: "Bientôt disponible. Vos crédits n'ont pas été consommés.", aiCredits: refunded });
     return;
   }
 
@@ -144,6 +182,7 @@ Réponds UNIQUEMENT avec le JSON valide, sans markdown, sans explication.`;
     const result = JSON.parse(cleaned);
     res.json({ ...result, aiCredits: deduct.remaining });
   } catch (err: any) {
+    await notifyAiQuotaIfNeeded(err, { action: 'Génération devis IA', userId: req.userId });
     const refunded = await refundCredit(req.userId!, 'Génération devis IA').catch(() => deduct.remaining);
     res.status(502).json({ message: aiErrorMessage(err), aiCredits: refunded });
   }
@@ -166,7 +205,14 @@ router.post('/suggest-price', authenticate, async (req: AuthRequest, res): Promi
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    res.status(503).json({ message: 'IA non configurée — ajoutez OPENAI_API_KEY dans .env', aiCredits: deduct.remaining });
+    const refunded = await refundCredit(req.userId!, 'Suggestion de prix IA').catch(() => deduct.remaining);
+    await sendAdminAlertEmail({
+      subject: 'NexaPay — OPENAI_API_KEY manquante',
+      title: 'IA non configurée',
+      message: 'Une requête IA a été faite mais OPENAI_API_KEY est absente.',
+      details: { action: 'Suggestion de prix IA', userId: req.userId, date: new Date().toISOString() },
+    }).catch(() => {});
+    res.status(503).json({ message: "Bientôt disponible. Vos crédits n'ont pas été consommés.", aiCredits: refunded });
     return;
   }
 
@@ -185,6 +231,7 @@ Réponds UNIQUEMENT avec ce JSON valide :
     const result = JSON.parse(cleaned);
     res.json({ ...result, aiCredits: deduct.remaining });
   } catch (err: any) {
+    await notifyAiQuotaIfNeeded(err, { action: 'Suggestion de prix IA', userId: req.userId });
     const refunded = await refundCredit(req.userId!, 'Suggestion de prix IA').catch(() => deduct.remaining);
     res.status(502).json({ message: aiErrorMessage(err), aiCredits: refunded });
   }
@@ -207,7 +254,14 @@ router.post('/improve-text', authenticate, async (req: AuthRequest, res): Promis
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    res.status(503).json({ message: 'IA non configurée — ajoutez OPENAI_API_KEY dans .env', aiCredits: deduct.remaining });
+    const refunded = await refundCredit(req.userId!, 'Amélioration texte IA').catch(() => deduct.remaining);
+    await sendAdminAlertEmail({
+      subject: 'NexaPay — OPENAI_API_KEY manquante',
+      title: 'IA non configurée',
+      message: 'Une requête IA a été faite mais OPENAI_API_KEY est absente.',
+      details: { action: 'Amélioration texte IA', userId: req.userId, date: new Date().toISOString() },
+    }).catch(() => {});
+    res.status(503).json({ message: "Bientôt disponible. Vos crédits n'ont pas été consommés.", aiCredits: refunded });
     return;
   }
 
@@ -223,6 +277,7 @@ Réponds UNIQUEMENT avec le texte amélioré, sans guillemets, sans explication.
     const improved = await openaiChat([{ role: 'user', content: prompt }]);
     res.json({ improved: improved.trim(), aiCredits: deduct.remaining });
   } catch (err: any) {
+    await notifyAiQuotaIfNeeded(err, { action: 'Amélioration texte IA', userId: req.userId });
     const refunded = await refundCredit(req.userId!, 'Amélioration texte IA').catch(() => deduct.remaining);
     res.status(502).json({ message: aiErrorMessage(err), aiCredits: refunded });
   }

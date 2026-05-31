@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { quotesApi, clientsApi, productsApi, aiApi, creditsApi } from '@/lib/api';
+import { quotesApi, clientsApi, productsApi, aiApi, creditsApi, paymentsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { momoLabel } from '@/lib/phone';
 import { fmtXOF } from '@/lib/utils';
@@ -58,6 +58,7 @@ export default function QuoteCreate() {
   const [sendWhatsapp, setSendWhatsapp] = useState(true);
   const [sendMomo, setSendMomo] = useState(false);
   const [showProductMenu, setShowProductMenu] = useState(false);
+  const canUseMomo = user?.plan === 'PRO' || user?.plan === 'BUSINESS';
 
   // Initialise depuis l'existant (edit) ou depuis le paramètre d'URL ?clientId=
   useEffect(() => {
@@ -78,6 +79,10 @@ export default function QuoteCreate() {
     if (preselect) setClientId(preselect);
     else if (clients.length > 0 && !clientId) setClientId(clients[0].id);
   }, [clients, searchParams]);
+
+  useEffect(() => {
+    if (!canUseMomo && sendMomo) setSendMomo(false);
+  }, [canUseMomo, sendMomo]);
 
   // Totaux calculés
   const subtotal = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
@@ -187,6 +192,10 @@ export default function QuoteCreate() {
         res = await quotesApi.create(payload);
       }
 
+      if (!asDraft && sendMomo && canUseMomo && res.data.id) {
+        await paymentsApi.initiate(res.data.id);
+      }
+
       return res;
     },
     onSuccess: (res, asDraft) => {
@@ -194,10 +203,10 @@ export default function QuoteCreate() {
       qc.invalidateQueries({ queryKey: ['quotes'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['notif-quotes'] });
-      navigate(`/quotes/${res.data.id}${asDraft ? '' : '?send=1'}`);
+      navigate(`/quotes/${res.data.id}${!asDraft && sendEmail ? '?send=1' : ''}`);
     },
-    onError: (err: Error) => {
-      setSaveError(err.message || 'Une erreur est survenue. Vérifiez votre connexion.');
+    onError: (err: any) => {
+      setSaveError(err.response?.data?.message || err.message || 'Une erreur est survenue. Vérifiez votre connexion.');
     },
   });
 
@@ -539,7 +548,9 @@ export default function QuoteCreate() {
               {[
                 { state: sendEmail,    set: setSendEmail,    label: 'Envoyer par e-mail',           sub: selectedClient?.email || 'Sélectionnez un client' },
                 { state: sendWhatsapp, set: setSendWhatsapp, label: 'Notifier par WhatsApp / SMS',  sub: selectedClient?.phone || 'Sélectionnez un client' },
-                { state: sendMomo,     set: setSendMomo,     label: 'Activer paiement Mobile Money', sub: momoLabel(user?.phoneCountry ?? 'bj') },
+                ...(canUseMomo
+                  ? [{ state: sendMomo, set: setSendMomo, label: 'Activer paiement Mobile Money', sub: momoLabel(user?.phoneCountry ?? 'bj') }]
+                  : []),
               ].map(({ state, set, label, sub }) => (
                 <label key={label} className="flex items-start gap-2.5 text-[13px] mb-2.5 cursor-pointer">
                   <input type="checkbox" checked={state} onChange={e => set(e.target.checked)} className="mt-0.5 accent-primary" />

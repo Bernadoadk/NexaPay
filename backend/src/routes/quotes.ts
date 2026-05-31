@@ -9,6 +9,14 @@ import { sendQuoteEmail } from '../utils/email';
 const router = Router();
 const prisma = new PrismaClient();
 
+const CLASSIC_TEMPLATE_IDS = new Set([
+  'classique', 'marine', 'bordeaux', 'or', 'anthracite', 'prune', 'sable', 'encre',
+]);
+
+function canUseQuoteTemplate(plan: string | null | undefined, templateId: string) {
+  return plan === 'BUSINESS' || CLASSIC_TEMPLATE_IDS.has(templateId);
+}
+
 router.use(authenticate);
 
 function calcTotals(items: any[], taxRate: number, discount: number) {
@@ -238,12 +246,16 @@ router.post('/:id/send-email', async (req: AuthRequest, res): Promise<void> => {
     include: {
       client: true,
       items: { orderBy: { order: 'asc' } },
-      user: { select: { name: true, companyName: true, email: true } },
+      user: { select: { name: true, companyName: true, email: true, plan: true } },
     },
   });
   if (!quote) { res.status(404).json({ message: 'Devis introuvable' }); return; }
   if (!quote.client?.email) {
     res.status(400).json({ message: 'Ce client n’a pas d’adresse e-mail' });
+    return;
+  }
+  if (!canUseQuoteTemplate(quote.user.plan, String(templateId || 'classique'))) {
+    res.status(403).json({ message: 'Ce modèle de devis nécessite le plan Business' });
     return;
   }
 
@@ -265,6 +277,9 @@ router.post('/:id/send-email', async (req: AuthRequest, res): Promise<void> => {
       total: quote.total,
       companyName: quote.user.companyName || quote.user.name || 'NexaPay',
       templateName: templateName || templateId,
+      paymentUrl: quote.paymentUrl
+        ? `${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')}/pay/${quote.id}`
+        : undefined,
       pdfBuffer,
     });
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quotesApi, paymentsApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { fmtXOF, fmtDateFR, validUntil } from '@/lib/utils';
 import type { Quote } from '@/types';
 import Avatar from '@/components/ui/Avatar';
@@ -42,6 +43,7 @@ export default function QuoteDetail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user: authUser } = useAuth();
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSendTemplateModal, setShowSendTemplateModal] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -131,6 +133,7 @@ export default function QuoteDetail() {
   const shareUrl = `${window.location.origin}/pay/${id}`;
   const awaitingPayment = quote.status === 'SENT' && !!quote.paymentRef;
   const displayStatus = awaitingPayment ? 'AWAITING' : quote.status;
+  const canUseMomo = authUser?.plan === 'PRO' || authUser?.plan === 'BUSINESS';
 
   const whatsappMessage = encodeURIComponent(
     `Bonjour ${client?.contact || client?.name || ''}, voici le devis ${quote.number} — ${quote.title} (${fmtXOF(total)}). Lien de paiement Mobile Money : ${shareUrl}`,
@@ -531,7 +534,7 @@ export default function QuoteDetail() {
           )}
 
           {/* Pas encore de lien de paiement */}
-          {quote.status !== 'PAID' && !quote.paymentUrl && (
+          {canUseMomo && quote.status !== 'PAID' && !quote.paymentUrl && (
             <div className="bg-surface border border-border rounded shadow-sm p-[18px]">
               <div className="text-[13px] font-semibold mb-1">Lien de paiement</div>
               <div className="text-[12px] text-text-muted mb-3">
