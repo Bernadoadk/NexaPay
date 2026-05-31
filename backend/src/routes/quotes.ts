@@ -111,8 +111,9 @@ router.post(
 );
 
 router.get('/:id', async (req: AuthRequest, res): Promise<void> => {
+  const quoteId = String(req.params.id);
   let quote = await prisma.quote.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: quoteId, userId: req.userId },
     include: {
       client: true,
       items: { orderBy: { order: 'asc' } },
@@ -127,7 +128,7 @@ router.get('/:id', async (req: AuthRequest, res): Promise<void> => {
     const result = await syncQuoteFromFedapay(quote.id).catch(() => null);
     if (result?.changed) {
       quote = await prisma.quote.findFirst({
-        where: { id: req.params.id, userId: req.userId },
+        where: { id: quoteId, userId: req.userId },
         include: {
           client: true,
           items: { orderBy: { order: 'asc' } },
@@ -141,8 +142,9 @@ router.get('/:id', async (req: AuthRequest, res): Promise<void> => {
 
 // Manual "check now" — bypasses the throttle, used by the "Vérifier" button.
 router.post('/:id/check-payment', async (req: AuthRequest, res): Promise<void> => {
+  const quoteId = String(req.params.id);
   const exists = await prisma.quote.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: quoteId, userId: req.userId },
     select: { id: true, status: true, paymentRef: true },
   });
   if (!exists) { res.status(404).json({ message: 'Devis introuvable' }); return; }
@@ -162,7 +164,8 @@ router.post('/:id/check-payment', async (req: AuthRequest, res): Promise<void> =
 });
 
 router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
-  const exists = await prisma.quote.findFirst({ where: { id: req.params.id, userId: req.userId } });
+  const quoteId = String(req.params.id);
+  const exists = await prisma.quote.findFirst({ where: { id: quoteId, userId: req.userId } });
   if (!exists) { res.status(404).json({ message: 'Devis introuvable' }); return; }
 
   const { items, title, clientId, notes, taxRate, discount, issuedAt, validDays } = req.body;
@@ -172,7 +175,7 @@ router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
   const totals = items ? calcTotals(items, effectiveTax, effectiveDiscount) : {};
 
   const updated = await prisma.quote.update({
-    where: { id: req.params.id },
+    where: { id: quoteId },
     data: {
       ...(title !== undefined && { title }),
       ...(clientId !== undefined && { clientId }),
@@ -203,7 +206,8 @@ router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
 });
 
 router.patch('/:id/status', async (req: AuthRequest, res): Promise<void> => {
-  const exists = await prisma.quote.findFirst({ where: { id: req.params.id, userId: req.userId } });
+  const quoteId = String(req.params.id);
+  const exists = await prisma.quote.findFirst({ where: { id: quoteId, userId: req.userId } });
   if (!exists) { res.status(404).json({ message: 'Devis introuvable' }); return; }
 
   const { status } = req.body;
@@ -212,7 +216,7 @@ router.patch('/:id/status', async (req: AuthRequest, res): Promise<void> => {
   if (status === 'PAID') extra.paidAt = new Date();
 
   const updated = await prisma.quote.update({
-    where: { id: req.params.id },
+    where: { id: quoteId },
     data: { status, ...extra },
     include: { client: true, items: { orderBy: { order: 'asc' } } },
   });
@@ -220,8 +224,9 @@ router.patch('/:id/status', async (req: AuthRequest, res): Promise<void> => {
 });
 
 router.post('/:id/duplicate', async (req: AuthRequest, res): Promise<void> => {
+  const quoteId = String(req.params.id);
   const original = await prisma.quote.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: quoteId, userId: req.userId },
     include: { items: { orderBy: { order: 'asc' } } },
   });
   if (!original) { res.status(404).json({ message: 'Devis introuvable' }); return; }
@@ -260,9 +265,10 @@ router.post('/:id/duplicate', async (req: AuthRequest, res): Promise<void> => {
 });
 
 router.delete('/:id', async (req: AuthRequest, res): Promise<void> => {
-  const exists = await prisma.quote.findFirst({ where: { id: req.params.id, userId: req.userId } });
+  const quoteId = String(req.params.id);
+  const exists = await prisma.quote.findFirst({ where: { id: quoteId, userId: req.userId } });
   if (!exists) { res.status(404).json({ message: 'Devis introuvable' }); return; }
-  await prisma.quote.delete({ where: { id: req.params.id } });
+  await prisma.quote.delete({ where: { id: quoteId } });
   res.status(204).send();
 });
 

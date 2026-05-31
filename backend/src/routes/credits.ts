@@ -21,6 +21,27 @@ export const CREDIT_PACKS = [
   { id: 'pack_100', credits: 100, price: 9000, label: '100 crédits' },
 ];
 
+function getTx(data: any) {
+  return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
+}
+
+function getCustomerEmail(tx: any): string {
+  return String(tx?.customer?.email ?? tx?.customer_email ?? '').toLowerCase();
+}
+
+function getTxAmount(tx: any): number {
+  return Number(tx?.amount ?? tx?.amount_debited ?? tx?.amount_transferred ?? 0);
+}
+
+async function getApprovedFedapayTransaction(transactionId: string | number) {
+  const txData: any = await fedapayReq('GET', `/transactions/${transactionId}`);
+  const tx = getTx(txData);
+  if (tx?.status !== 'approved') {
+    throw Object.assign(new Error(`Paiement non confirmé (statut: ${tx?.status || 'inconnu'})`), { status: 402 });
+  }
+  return tx;
+}
+
 async function fedapayReq(method: string, path: string, body?: object) {
   const apiKey = process.env.FEDAPAY_SECRET_KEY || '';
   const res = await fetch(`${FEDAPAY_BASE}${path}`, {
@@ -137,11 +158,20 @@ router.post('/confirm-purchase', authenticate, async (req: AuthRequest, res): Pr
       return;
     }
 
-    const txData: any = await fedapayReq('GET', `/transactions/${txRef}`);
-    const tx = txData?.['v1/transaction'] ?? txData?.v1?.transaction ?? txData;
-    const status: string = tx?.status ?? '';
-    if (status !== 'approved') {
-      res.status(402).json({ message: `Paiement non confirmé (statut: ${status})` });
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { email: true },
+    });
+    if (!user) { res.status(404).json({ message: 'Utilisateur introuvable' }); return; }
+
+    const tx = await getApprovedFedapayTransaction(txRef);
+    const expectedDescription = `NexaPay Crédits IA — ${pack.label}`;
+    if (
+      String(tx?.description ?? '') !== expectedDescription ||
+      getTxAmount(tx) !== pack.price ||
+      getCustomerEmail(tx) !== user.email.toLowerCase()
+    ) {
+      res.status(400).json({ message: 'Transaction FedaPay incohérente avec la demande' });
       return;
     }
 
@@ -165,7 +195,7 @@ router.post('/confirm-purchase', authenticate, async (req: AuthRequest, res): Pr
     res.json({ success: true, aiCredits: updated.aiCredits, added: pack.credits });
   } catch (err: any) {
     console.error('[ConfirmPurchase] Erreur:', err.message);
-    res.status(500).json({ message: `Erreur confirmation : ${err.message}` });
+    res.status(err.status || 500).json({ message: `Erreur confirmation : ${err.message}` });
   }
 });
 
@@ -202,7 +232,7 @@ router.post('/purchase', authenticate, async (req: AuthRequest, res): Promise<vo
       },
     });
 
-    const tx = txData?.['v1/transaction'] ?? txData?.v1?.transaction ?? txData;
+    const tx = getTx(txData);
     const transId = tx?.id;
     const checkoutBase = process.env.FEDAPAY_ENV === 'live'
       ? 'https://checkout.fedapay.com/v1/checkout'

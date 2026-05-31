@@ -7,8 +7,10 @@ import { prisma } from '../lib/prisma';
 import { OAuth2Client } from 'google-auth-library';
 import appleSignin from 'apple-signin-auth';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { rateLimit } from '../middleware/rateLimit';
 import { sendOtpEmail } from '../utils/email';
 import { toE164 } from '../utils/phone';
+import { deleteCloudinaryImage } from '../lib/cloudinary';
 
 const router = Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -23,8 +25,9 @@ function generateOtp(): string {
 async function createAndSendOtp(userId: string, email: string, name: string): Promise<void> {
   await prisma.otpCode.deleteMany({ where: { userId } });
   const code = generateOtp();
+  const hashedCode = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  await prisma.otpCode.create({ data: { email, code, expiresAt, userId } });
+  await prisma.otpCode.create({ data: { email, code: hashedCode, expiresAt, userId } });
   try {
     await sendOtpEmail(email, code, name);
   } catch (err) {
@@ -32,6 +35,29 @@ async function createAndSendOtp(userId: string, email: string, name: string): Pr
     // Compte créé — l'utilisateur pourra demander un nouveau code (resend-otp)
   }
 }
+
+const authAttemptLimiter = rateLimit({
+  keyPrefix: 'auth-attempt',
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  key: (req) => `${req.ip}:${String(req.body?.email || '').toLowerCase()}`,
+});
+
+const otpLimiter = rateLimit({
+  keyPrefix: 'otp',
+  windowMs: 10 * 60 * 1000,
+  max: 6,
+  key: (req) => `${req.ip}:${String(req.body?.email || '').toLowerCase()}`,
+  message: 'Trop de tentatives OTP. Réessayez dans quelques minutes.',
+});
+
+const resendOtpLimiter = rateLimit({
+  keyPrefix: 'otp-resend',
+  windowMs: 10 * 60 * 1000,
+  max: 3,
+  key: (req) => `${req.ip}:${String(req.body?.email || '').toLowerCase()}`,
+  message: 'Trop de demandes de renvoi. Réessayez dans quelques minutes.',
+});
 
 async function getGoogleProfile(token: string): Promise<GoogleProfile> {
   try {
@@ -57,8 +83,9 @@ async function getGoogleProfile(token: string): Promise<GoogleProfile> {
 // POST /auth/register
 router.post(
   '/register',
+  authAttemptLimiter,
   body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }),
+  body('password').isLength({ min: 8 }),
   body('name').trim().notEmpty(),
   async (req, res): Promise<void> => {
     try {
@@ -125,6 +152,7 @@ router.post(
 // POST /auth/verify-email
 router.post(
   '/verify-email',
+  otpLimiter,
   body('email').isEmail().normalizeEmail(),
   body('code').isLength({ min: 6, max: 6 }),
   async (req, res): Promise<void> => {
@@ -132,9 +160,18 @@ router.post(
     if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
 
     const { email, code } = req.body;
-    const otp = await prisma.otpCode.findFirst({
-      where: { email, code, used: false, expiresAt: { gt: new Date() } },
+    const otps = await prisma.otpCode.findMany({
+      where: { email, used: false, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
     });
+    let otp = null;
+    for (const candidate of otps) {
+      if (await bcrypt.compare(code, candidate.code)) {
+        otp = candidate;
+        break;
+      }
+    }
 
     if (!otp) {
       res.status(400).json({ message: 'Code invalide ou expiré' });
@@ -156,6 +193,7 @@ router.post(
 // POST /auth/resend-otp
 router.post(
   '/resend-otp',
+  resendOtpLimiter,
   body('email').isEmail().normalizeEmail(),
   async (req, res): Promise<void> => {
     const errors = validationResult(req);
@@ -174,6 +212,7 @@ router.post(
 // POST /auth/login
 router.post(
   '/login',
+  authAttemptLimiter,
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
   async (req, res): Promise<void> => {
@@ -339,6 +378,34 @@ router.get('/me', authenticate, async (req: AuthRequest, res): Promise<void> => 
   res.json(user);
 });
 
+router.get('/export-data', authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const userId = req.userId!;
+  const [user, clients, products, quotes, payments, creditTransactions] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT }),
+    prisma.client.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+    prisma.product.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+    prisma.quote.findMany({
+      where: { userId },
+      include: { client: true, items: { orderBy: { order: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.payment.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+    prisma.creditTransaction.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+  ]);
+
+  if (!user) { res.status(404).json({ message: 'Utilisateur introuvable' }); return; }
+
+  res.json({
+    exportedAt: new Date().toISOString(),
+    user,
+    clients,
+    products,
+    quotes,
+    payments,
+    creditTransactions,
+  });
+});
+
 router.put('/me', authenticate, async (req: AuthRequest, res): Promise<void> => {
   const { name, companyName, phoneCountry, address, ifu, rccm, useProfilePhotoAsLogo } = req.body;
   const country = phoneCountry || 'bj';
@@ -354,6 +421,31 @@ router.put('/me', authenticate, async (req: AuthRequest, res): Promise<void> => 
     select: USER_SELECT,
   });
   res.json(user);
+});
+
+router.delete('/me', authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.body?.confirm !== 'SUPPRIMER') {
+    res.status(400).json({ message: 'Confirmation requise' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId },
+    select: { logoPublicId: true, quoteLogoPublicId: true },
+  });
+  if (!user) { res.status(404).json({ message: 'Utilisateur introuvable' }); return; }
+
+  await prisma.$transaction([
+    prisma.payment.deleteMany({ where: { userId: req.userId! } }),
+    prisma.user.delete({ where: { id: req.userId! } }),
+  ]);
+
+  await Promise.all([
+    user.logoPublicId ? deleteCloudinaryImage(user.logoPublicId) : Promise.resolve(),
+    user.quoteLogoPublicId ? deleteCloudinaryImage(user.quoteLogoPublicId) : Promise.resolve(),
+  ]);
+
+  res.status(204).send();
 });
 
 export { router as authRouter };

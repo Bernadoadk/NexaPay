@@ -50,6 +50,8 @@ export const authApi = {
     api.post('/auth/apple', data),
   me: () => api.get('/auth/me'),
   updateMe: (data: object) => api.put('/auth/me', data),
+  exportData: () => api.get('/auth/export-data'),
+  deleteAccount: () => api.delete('/auth/me', { data: { confirm: 'SUPPRIMER' } }),
 };
 
 export const clientsApi = {

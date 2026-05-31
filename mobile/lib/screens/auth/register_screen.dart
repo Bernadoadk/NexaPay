@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -117,6 +118,10 @@ class _RegisterScreenState extends State<RegisterScreen>
   Future<void> _appleSignup() async {
     setState(() => _error = null);
     await showAppleComingSoonDialog(context);
+  }
+
+  Future<void> _openLegal(String url) async {
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -346,7 +351,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                               textInputAction: TextInputAction.done,
                               onFieldSubmitted: (_) => _submit(),
                               decoration: InputDecoration(
-                                hintText: 'Minimum 6 caractères',
+                                hintText: 'Minimum 8 caractères',
                                 prefixIcon: Icon(Icons.lock_outline_rounded,
                                     size: 18, color: context.appTextMuted),
                                 suffixIcon: IconButton(
@@ -361,8 +366,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                                       setState(() => _obscure = !_obscure),
                                 ),
                               ),
-                              validator: (v) => (v == null || v.length < 6)
-                                  ? 'Minimum 6 caractères'
+                              validator: (v) => (v == null || v.length < 8)
+                                  ? 'Minimum 8 caractères'
                                   : null,
                             ),
                           ),
@@ -409,11 +414,41 @@ class _RegisterScreenState extends State<RegisterScreen>
                           ),
                           const SizedBox(height: 20),
 
-                          Text(
-                            'En créant un compte, vous acceptez nos conditions d\'utilisation.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontSize: 11.5, color: context.appTextSubtle),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                'En créant un compte, vous acceptez nos ',
+                                style: TextStyle(fontSize: 11.5, color: context.appTextSubtle),
+                              ),
+                              TextButton(
+                                onPressed: () => _openLegal('https://nexapay-page.vercel.app/conditions-utilisation'),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text('conditions d\'utilisation', style: TextStyle(fontSize: 11.5, color: AppColors.primary)),
+                              ),
+                              Text(
+                                ' et notre ',
+                                style: TextStyle(fontSize: 11.5, color: context.appTextSubtle),
+                              ),
+                              TextButton(
+                                onPressed: () => _openLegal('https://nexapay-page.vercel.app/politique-confidentialite'),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text('politique de confidentialité', style: TextStyle(fontSize: 11.5, color: AppColors.primary)),
+                              ),
+                              Text(
+                                '.',
+                                style: TextStyle(fontSize: 11.5, color: context.appTextSubtle),
+                              ),
+                            ],
                           ),
                         ],
                       ),

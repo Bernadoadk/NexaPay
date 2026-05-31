@@ -61,8 +61,9 @@ router.post(
 );
 
 router.get('/:id', async (req: AuthRequest, res): Promise<void> => {
+  const clientId = String(req.params.id);
   const client = await prisma.client.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: clientId, userId: req.userId },
     include: { quotes: { orderBy: { createdAt: 'desc' }, take: 10 } },
   });
   if (!client) { res.status(404).json({ message: 'Client introuvable' }); return; }
@@ -70,7 +71,8 @@ router.get('/:id', async (req: AuthRequest, res): Promise<void> => {
 });
 
 router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
-  const exists = await prisma.client.findFirst({ where: { id: req.params.id, userId: req.userId } });
+  const clientId = String(req.params.id);
+  const exists = await prisma.client.findFirst({ where: { id: clientId, userId: req.userId } });
   if (!exists) { res.status(404).json({ message: 'Client introuvable' }); return; }
   // Strip virtual/computed fields and immutable fields
   const { userId: _, id: _id, quotesCount: _qc, totalBilled: _tb, createdAt: _ca, updatedAt: _ua, ...rest } = req.body;
@@ -80,14 +82,15 @@ router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
     phoneCountry,
     ...(rest.phone !== undefined ? { phone: rest.phone ? toE164(rest.phone, phoneCountry) : null } : {}),
   };
-  const updated = await prisma.client.update({ where: { id: req.params.id }, data });
+  const updated = await prisma.client.update({ where: { id: clientId }, data });
   res.json(updated);
 });
 
 router.delete('/:id', async (req: AuthRequest, res): Promise<void> => {
-  const exists = await prisma.client.findFirst({ where: { id: req.params.id, userId: req.userId } });
+  const clientId = String(req.params.id);
+  const exists = await prisma.client.findFirst({ where: { id: clientId, userId: req.userId } });
   if (!exists) { res.status(404).json({ message: 'Client introuvable' }); return; }
-  await prisma.client.delete({ where: { id: req.params.id } });
+  await prisma.client.delete({ where: { id: clientId } });
   res.status(204).send();
 });
 

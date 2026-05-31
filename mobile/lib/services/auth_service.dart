@@ -87,6 +87,15 @@ class AuthService {
     return User.fromJson(res.data);
   }
 
+  static Future<Map<String, dynamic>> exportData() async {
+    final res = await ApiClient.instance.get('/auth/export-data');
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  static Future<void> deleteAccount() async {
+    await ApiClient.instance.delete('/auth/me', data: {'confirm': 'SUPPRIMER'});
+  }
+
   static Future<User> uploadAvatar(String filePath) async {
     final formData = FormData.fromMap({
       'image': await MultipartFile.fromFile(filePath, filename: 'avatar.jpg'),

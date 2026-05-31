@@ -279,8 +279,8 @@ export default function Register() {
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  {...register('password', { required: true, minLength: 6 })}
-                  placeholder="Minimum 6 caractères"
+                  {...register('password', { required: true, minLength: 8 })}
+                  placeholder="Minimum 8 caractères"
                   className="w-full h-11 px-3.5 pr-10 rounded-lg border border-border-strong bg-surface text-[14px] placeholder-text-subtle focus:outline-none focus:border-primary focus:ring-3 focus:ring-primary/10 transition-all"
                 />
                 <button
@@ -329,7 +329,14 @@ export default function Register() {
           </div>
 
           <p className="mt-6 text-center text-[11px] text-text-subtle leading-relaxed">
-            En créant un compte, vous acceptez nos conditions d'utilisation.
+            En créant un compte, vous acceptez nos{' '}
+            <a href="https://nexapay-page.vercel.app/conditions-utilisation" className="text-primary hover:underline">
+              conditions d'utilisation
+            </a>{' '}
+            et notre{' '}
+            <a href="https://nexapay-page.vercel.app/politique-confidentialite" className="text-primary hover:underline">
+              politique de confidentialité
+            </a>.
           </p>
         </div>
       </div>
