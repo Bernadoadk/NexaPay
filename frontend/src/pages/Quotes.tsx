@@ -9,6 +9,7 @@ import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import ContextMenu from '@/components/ui/ContextMenu';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PlusIcon, DownloadIcon, SearchIcon, FilterIcon, MoreIcon, EditIcon, CopyIcon, TrashIcon, SendIcon } from '@/components/ui/Icon';
 
 const STATUS_TABS: { label: string; value: string }[] = [
@@ -41,6 +42,7 @@ export default function Quotes() {
   const [search, setSearch] = useState('');
   const activeStatus = searchParams.get('status') || '';
   const qc = useQueryClient();
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const { data: quotes = [], isLoading } = useQuery<Quote[]>({
     queryKey: ['quotes', activeStatus],
@@ -114,8 +116,15 @@ export default function Quotes() {
         label: 'Supprimer',
         icon: <TrashIcon size={13} />,
         danger: true,
-        onClick: () => {
-          if (confirm(`Supprimer ${q.number} ?`)) deleteMutation.mutate(q.id);
+        onClick: async () => {
+          const confirmed = await confirm({
+            eyebrow: 'Suppression définitive',
+            title: `Supprimer ${q.number} ?`,
+            description: `Le devis "${q.title}" sera retiré de votre liste. Cette action est irréversible.`,
+            confirmLabel: 'Supprimer le devis',
+            tone: 'danger',
+          });
+          if (confirmed) deleteMutation.mutate(q.id);
         },
       },
     ];
@@ -288,6 +297,7 @@ export default function Quotes() {
           ))
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 }

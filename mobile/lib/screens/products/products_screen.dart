@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../../theme.dart';
 import '../../models/product.dart';
 import '../../providers/products_provider.dart';
+import '../../widgets/confirm_action_sheet.dart';
 import '../../widgets/slide_in.dart';
 
 /// Catalogue produits / services — port mobile de la refonte web.
@@ -218,71 +219,46 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
-  void _confirmDelete(BuildContext ctx, ProductsProvider prov, Product p) {
-    showDialog(
+  Future<void> _confirmDelete(
+      BuildContext ctx, ProductsProvider prov, Product p) async {
+    final confirmed = await showConfirmActionSheet(
       context: ctx,
-      builder: (_) => AlertDialog(
-        title: const Text('Supprimer le produit'),
-        content: Text(
-          'Supprimer définitivement « ${p.name} » ? '
-          'Cette action est irréversible.',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await prov.delete(p.id);
-              } on DioException catch (e) {
-                // Le backend renvoie 409/IN_USE si le produit est référencé
-                // par un devis existant — on bascule alors sur archive.
-                if (!ctx.mounted) return;
-                if (e.response?.statusCode == 409) {
-                  _offerArchiveInstead(ctx, prov, p);
-                } else {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(
-                        content: Text('Erreur lors de la suppression')),
-                  );
-                }
-              }
-            },
-            child: Text('Supprimer',
-                style: TextStyle(color: AppColors.statusOverdue)),
-          ),
-        ],
-      ),
+      title: 'Supprimer « ${p.name} » ?',
+      message:
+          'Cet article sera supprimé définitivement du catalogue. Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+      tone: ConfirmActionTone.danger,
     );
+    if (!confirmed || !ctx.mounted) return;
+
+    try {
+      await prov.delete(p.id);
+    } on DioException catch (e) {
+      // Le backend renvoie 409/IN_USE si le produit est référencé
+      // par un devis existant — on bascule alors sur archive.
+      if (!ctx.mounted) return;
+      if (e.response?.statusCode == 409) {
+        _offerArchiveInstead(ctx, prov, p);
+      } else {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de la suppression')),
+        );
+      }
+    }
   }
 
-  void _offerArchiveInstead(
-      BuildContext ctx, ProductsProvider prov, Product p) {
-    showDialog(
+  Future<void> _offerArchiveInstead(
+      BuildContext ctx, ProductsProvider prov, Product p) async {
+    final confirmed = await showConfirmActionSheet(
       context: ctx,
-      builder: (_) => AlertDialog(
-        title: const Text('Produit utilisé'),
-        content: Text(
-          '« ${p.name} » apparaît dans des devis existants et ne peut pas '
-          'être supprimé. Vous pouvez l\'archiver — il restera visible '
-          'dans l\'historique mais disparaîtra du catalogue actif.',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _archive(ctx, prov, p);
-            },
-            child: const Text('Archiver'),
-          ),
-        ],
-      ),
+      title: 'Produit déjà utilisé',
+      message:
+          '« ${p.name} » apparaît dans des devis existants et ne peut pas être supprimé. Vous pouvez l’archiver pour le masquer du catalogue actif.',
+      confirmLabel: 'Archiver',
+      tone: ConfirmActionTone.warning,
+      icon: Icons.archive_outlined,
     );
+    if (confirmed && ctx.mounted) await _archive(ctx, prov, p);
   }
 
   void _showForm(BuildContext ctx, {Product? product}) {

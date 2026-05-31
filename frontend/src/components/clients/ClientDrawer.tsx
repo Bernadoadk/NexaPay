@@ -9,6 +9,7 @@ import type { Client } from '@/types';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import PhoneCountryInput from '@/components/ui/PhoneCountryInput';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { XIcon } from '@/components/ui/Icon';
 
 interface Props {
@@ -29,6 +30,7 @@ export default function ClientDrawer({ client, onClose }: Props) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { register, handleSubmit, reset } = useForm<Partial<Client>>({ defaultValues: client });
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const init = parsePhone(client);
   const [phone, setPhone] = useState(init.local);
@@ -60,12 +62,24 @@ export default function ClientDrawer({ client, onClose }: Props) {
     navigate(`/quotes/new?clientId=${client.id}`);
   }
 
+  async function handleDelete() {
+    const confirmed = await confirm({
+      eyebrow: 'Suppression définitive',
+      title: `Supprimer "${client.name}" ?`,
+      description: 'Ce client et tous ses devis associés seront supprimés. Cette action est irréversible.',
+      confirmLabel: 'Supprimer le client',
+      tone: 'danger',
+    });
+    if (confirmed) deleteMutation.mutate();
+  }
+
   return (
-    <div className="fixed inset-0 z-30 bg-text/25 flex justify-end" onClick={onClose}>
-      <div
-        onClick={e => e.stopPropagation()}
-        className="w-full max-w-[440px] h-full bg-surface border-l border-border shadow-lg flex flex-col"
-      >
+    <>
+      <div className="fixed inset-0 z-30 bg-text/25 flex justify-end" onClick={onClose}>
+        <div
+          onClick={e => e.stopPropagation()}
+          className="w-full max-w-[440px] h-full bg-surface border-l border-border shadow-lg flex flex-col"
+        >
         {/* Header */}
         <div className="px-[22px] py-[18px] border-b border-border flex items-center gap-3 flex-shrink-0">
           <Avatar name={client.name} color={client.color} size={42} />
@@ -143,7 +157,7 @@ export default function ClientDrawer({ client, onClose }: Props) {
             size="sm"
             className="text-danger hover:bg-danger-soft"
             loading={deleteMutation.isPending}
-            onClick={() => { if (confirm('Supprimer ce client ?')) deleteMutation.mutate(); }}
+            onClick={handleDelete}
           >
             Supprimer
           </Button>
@@ -169,5 +183,7 @@ export default function ClientDrawer({ client, onClose }: Props) {
         </div>
       </div>
     </div>
+      {confirmDialog}
+    </>
   );
 }

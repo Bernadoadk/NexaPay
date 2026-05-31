@@ -10,6 +10,7 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import TemplateSelectorModal from '@/components/quotes/TemplateSelectorModal';
 import ContextMenu from '@/components/ui/ContextMenu';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   ChevronLeftIcon, CopyIcon, EditIcon, MailIcon, DownloadIcon,
   SendIcon, PhoneIcon, TrashIcon, MoreIcon,
@@ -47,6 +48,7 @@ export default function QuoteDetail() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSendTemplateModal, setShowSendTemplateModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const { data: quote, isLoading, isFetching } = useQuery<Quote>({
     queryKey: ['quote', id],
@@ -148,11 +150,29 @@ export default function QuoteDetail() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!quote) return;
-    if (confirm(`Supprimer le devis ${quote.number} ? Cette action est irréversible.`)) {
-      deleteMutation.mutate();
-    }
+    const confirmed = await confirm({
+      eyebrow: 'Suppression définitive',
+      title: `Supprimer le devis ${quote.number} ?`,
+      description: `Le devis "${quote.title}" et son historique seront supprimés. Cette action est irréversible.`,
+      confirmLabel: 'Supprimer le devis',
+      tone: 'danger',
+    });
+    if (confirmed) deleteMutation.mutate();
+  }
+
+  async function handleManualPaidConfirm(longLabel = false) {
+    const confirmed = await confirm({
+      eyebrow: 'Confirmation de paiement',
+      title: 'Marquer ce devis comme payé ?',
+      description: longLabel
+        ? 'Utilisez cette action seulement si vous avez reçu le paiement hors lien, par exemple en espèces ou par virement.'
+        : 'Utilisez cette action seulement si vous avez reçu le paiement hors lien.',
+      confirmLabel: 'Marquer payé',
+      tone: 'warning',
+    });
+    if (confirmed) statusMutation.mutate('PAID');
   }
 
   const moreMenuItems = [
@@ -519,11 +539,7 @@ export default function QuoteDetail() {
                   Régénérer le lien
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm('Marquer ce devis comme payé hors lien (espèces, virement…) ?')) {
-                      statusMutation.mutate('PAID');
-                    }
-                  }}
+                  onClick={() => handleManualPaidConfirm(true)}
                   disabled={statusMutation.isPending}
                   className="text-text-muted hover:text-text hover:underline disabled:opacity-50"
                 >
@@ -554,11 +570,7 @@ export default function QuoteDetail() {
                 </div>
               )}
               <button
-                onClick={() => {
-                  if (confirm('Marquer ce devis comme payé hors lien ?')) {
-                    statusMutation.mutate('PAID');
-                  }
-                }}
+                onClick={() => handleManualPaidConfirm()}
                 disabled={statusMutation.isPending}
                 className="mt-3 text-[11.5px] text-text-muted hover:text-text hover:underline disabled:opacity-50 w-full text-center"
               >
@@ -607,6 +619,7 @@ export default function QuoteDetail() {
           }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }

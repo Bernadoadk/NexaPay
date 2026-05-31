@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button';
 import PhoneCountryInput from '@/components/ui/PhoneCountryInput';
 import ClientDrawer from '@/components/clients/ClientDrawer';
 import ContextMenu from '@/components/ui/ContextMenu';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PlusIcon, SearchIcon, DownloadIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, MoreIcon, XIcon, EditIcon, TrashIcon, FileIcon } from '@/components/ui/Icon';
 
 function NewClientModal({ onClose }: { onClose: () => void }) {
@@ -111,6 +112,7 @@ export default function Clients() {
   const [selected, setSelected] = useState<Client | null>(null);
   const [showNew, setShowNew] = useState(false);
   const cityRef = useRef<HTMLDivElement>(null);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => clientsApi.delete(id),
@@ -133,10 +135,15 @@ export default function Clients() {
         label: 'Supprimer',
         icon: <TrashIcon size={13} />,
         danger: true,
-        onClick: () => {
-          if (confirm(`Supprimer "${c.name}" et tous ses devis ?`)) {
-            deleteMutation.mutate(c.id);
-          }
+        onClick: async () => {
+          const confirmed = await confirm({
+            eyebrow: 'Suppression définitive',
+            title: `Supprimer "${c.name}" ?`,
+            description: 'Ce client et tous ses devis associés seront supprimés. Cette action est irréversible.',
+            confirmLabel: 'Supprimer le client',
+            tone: 'danger',
+          });
+          if (confirmed) deleteMutation.mutate(c.id);
         },
       },
     ];
@@ -338,6 +345,7 @@ export default function Clients() {
 
       {selected && <ClientDrawer client={selected} onClose={() => setSelected(null)} />}
       {showNew && <NewClientModal onClose={() => setShowNew(false)} />}
+      {confirmDialog}
     </div>
   );
 }

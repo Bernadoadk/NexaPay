@@ -7,6 +7,7 @@ import type { Product, ProductSort } from '@/types';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import ContextMenu from '@/components/ui/ContextMenu';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   PlusIcon, TrashIcon, EditIcon, XIcon, ReceiptIcon,
   SearchIcon, CopyIcon, MoreIcon, CheckIcon, ChevronDownIcon, AlertCircleIcon,
@@ -273,6 +274,7 @@ export default function Products() {
   const [showArchived, setShowArchived] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['products', { search, sort, archived: showArchived ? 'all' : '0' }],
@@ -354,8 +356,15 @@ export default function Products() {
         label: 'Supprimer',
         danger: true,
         icon: <TrashIcon size={14} />,
-        onClick: () => {
-          if (confirm(`Supprimer "${p.name}" du catalogue ?`)) deleteMutation.mutate(p.id);
+        onClick: async () => {
+          const confirmed = await confirm({
+            eyebrow: 'Suppression du catalogue',
+            title: `Supprimer "${p.name}" ?`,
+            description: 'Cet article sera supprimé du catalogue. Les produits déjà utilisés dans des devis peuvent être protégés par le système.',
+            confirmLabel: 'Supprimer l’article',
+            tone: 'danger',
+          });
+          if (confirmed) deleteMutation.mutate(p.id);
         },
       },
     ];
@@ -615,6 +624,7 @@ export default function Products() {
           existingCategories={categoriesInUse.map(([c]) => c).filter(Boolean)}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }
