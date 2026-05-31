@@ -843,6 +843,28 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               ),
             ),
           ],
+          if (!canUseMomo && q.status != QuoteStatus.paid && !q.isAwaitingPayment) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: null,
+                icon: const Icon(Icons.lock_rounded, size: 16),
+                label: const Text('Lien MoMo / Carte · Pro'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Réservé aux plans Pro et Business.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11.5, color: context.appTextMuted),
+            ),
+          ],
           if (q.isAwaitingPayment) ...[
             const SizedBox(height: 12),
             _AwaitingPaymentCard(

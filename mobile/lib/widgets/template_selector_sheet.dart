@@ -50,21 +50,16 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
 
   bool get _isBusiness => _currentPlan == 'BUSINESS';
 
-  List<QuoteTemplate> get _availableTemplates => _isBusiness
-      ? kQuoteTemplates
-      : kQuoteTemplates.where((t) => t.category == 'classique').toList();
-
-  List<(String, String)> get _availableCategories => _isBusiness
-      ? _categories
-      : _categories.where((c) => c.$1 == 'tous' || c.$1 == 'classique').toList();
+  bool _isTemplateLocked(QuoteTemplate tmpl) =>
+      !_isBusiness && tmpl.category != 'classique';
 
   List<QuoteTemplate> get _filtered {
-    if (_activeCategory == 'tous') return _availableTemplates;
-    return _availableTemplates.where((t) => t.category == _activeCategory).toList();
+    if (_activeCategory == 'tous') return kQuoteTemplates;
+    return kQuoteTemplates.where((t) => t.category == _activeCategory).toList();
   }
 
   QuoteTemplate get _selectedTemplate =>
-      _availableTemplates.firstWhere((t) => t.id == _selectedId, orElse: () => _availableTemplates.first);
+      kQuoteTemplates.firstWhere((t) => t.id == _selectedId, orElse: () => kQuoteTemplates.first);
 
   String get _currentPlan =>
       context.read<AuthProvider>().user?.plan ?? 'FREE';
@@ -80,6 +75,12 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
 
   void _selectTemplate(String id) {
     if (id == _selectedId) return;
+    final tmpl = kQuoteTemplates.firstWhere((t) => t.id == id, orElse: () => kQuoteTemplates.first);
+    if (_isTemplateLocked(tmpl)) {
+      setState(() => _sendError = 'Ce modèle est réservé au plan Business');
+      return;
+    }
+    _sendError = null;
     setState(() => _selectedId = id);
   }
 
@@ -88,10 +89,11 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
       _activeCategory = cat;
       // Si le template sélectionné n'est pas dans la catégorie, prendre le premier
       final filtered = cat == 'tous'
-          ? _availableTemplates
-          : _availableTemplates.where((t) => t.category == cat).toList();
-      if (filtered.isNotEmpty && !filtered.any((t) => t.id == _selectedId)) {
-        _selectedId = filtered.first.id;
+          ? kQuoteTemplates
+          : kQuoteTemplates.where((t) => t.category == cat).toList();
+      final unlocked = filtered.where((t) => !_isTemplateLocked(t)).toList();
+      if (unlocked.isNotEmpty && !unlocked.any((t) => t.id == _selectedId)) {
+        _selectedId = unlocked.first.id;
       }
     });
   }
@@ -232,11 +234,12 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _availableCategories.length,
+              itemCount: _categories.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
-                final (id, label) = _availableCategories[i];
+                final (id, label) = _categories[i];
                 final active = id == _activeCategory;
+                final lockedCategory = !_isBusiness && id != 'tous' && id != 'classique';
                 return GestureDetector(
                   onTap: () => _selectCategory(id),
                   child: AnimatedContainer(
@@ -250,13 +253,29 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
                         width: 1,
                       ),
                     ),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: active ? Colors.white : context.appTextMuted,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: active ? Colors.white : context.appTextMuted,
+                          ),
+                        ),
+                        if (lockedCategory) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            'Business',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: active ? Colors.white70 : context.appTextSubtle,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 );
@@ -379,6 +398,7 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
                     itemBuilder: (_, i) {
                       final tmpl = _filtered[i];
                       final selected = tmpl.id == _selectedId;
+                      final locked = _isTemplateLocked(tmpl);
                       return GestureDetector(
                         onTap: () => _selectTemplate(tmpl.id),
                         child: AnimatedContainer(
@@ -394,7 +414,34 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
                             borderRadius: BorderRadius.circular(9),
                             child: Column(
                               children: [
-                                Expanded(child: _TemplateThumbnail(tmpl: tmpl)),
+                                Expanded(
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      _TemplateThumbnail(tmpl: tmpl),
+                                      if (locked)
+                                        Container(
+                                          color: Colors.black.withOpacity(0.42),
+                                          alignment: Alignment.center,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(14),
+                                            ),
+                                            child: const Text(
+                                              'Business',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF14201C),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                                 Container(
                                   width: double.infinity,
                                   padding: const EdgeInsets.symmetric(vertical: 5),
@@ -407,7 +454,11 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                      color: selected ? AppColors.primary : context.appTextMuted,
+                                      color: locked
+                                          ? context.appTextSubtle
+                                          : selected
+                                              ? AppColors.primary
+                                              : context.appTextMuted,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),

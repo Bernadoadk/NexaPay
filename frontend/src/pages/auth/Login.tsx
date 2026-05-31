@@ -238,14 +238,6 @@ export default function Login() {
             </Link>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-border">
-            <p className="text-center text-[11.5px] text-text-subtle">
-              Compte démo ·{' '}
-              <span className="font-mono text-text-muted">adikpetobernado@gmail.com</span>{' '}
-              ·{' '}
-              <span className="font-mono text-text-muted">password123</span>
-            </p>
-          </div>
         </div>
       </div>
     </div>

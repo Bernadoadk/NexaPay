@@ -546,16 +546,39 @@ export default function QuoteCreate() {
             <div className="bg-surface border border-border rounded shadow-sm p-3.5 lg:p-[18px]">
               <div className="text-[13px] font-semibold mb-3">Options d'envoi</div>
               {[
-                { state: sendEmail,    set: setSendEmail,    label: 'Envoyer par e-mail',           sub: selectedClient?.email || 'Sélectionnez un client' },
-                { state: sendWhatsapp, set: setSendWhatsapp, label: 'Notifier par WhatsApp / SMS',  sub: selectedClient?.phone || 'Sélectionnez un client' },
-                ...(canUseMomo
-                  ? [{ state: sendMomo, set: setSendMomo, label: 'Activer paiement Mobile Money', sub: momoLabel(user?.phoneCountry ?? 'bj') }]
-                  : []),
-              ].map(({ state, set, label, sub }) => (
-                <label key={label} className="flex items-start gap-2.5 text-[13px] mb-2.5 cursor-pointer">
-                  <input type="checkbox" checked={state} onChange={e => set(e.target.checked)} className="mt-0.5 accent-primary" />
+                { state: sendEmail,    set: setSendEmail,    label: 'Envoyer par e-mail',           sub: selectedClient?.email || 'Sélectionnez un client', disabled: false },
+                { state: sendWhatsapp, set: setSendWhatsapp, label: 'Notifier par WhatsApp / SMS',  sub: selectedClient?.phone || 'Sélectionnez un client', disabled: false },
+                {
+                  state: sendMomo,
+                  set: setSendMomo,
+                  label: 'Activer paiement Mobile Money',
+                  sub: canUseMomo ? momoLabel(user?.phoneCountry ?? 'bj') : 'Réservé aux plans Pro et Business',
+                  disabled: !canUseMomo,
+                },
+              ].map(({ state, set, label, sub, disabled }) => (
+                <label
+                  key={label}
+                  className={[
+                    'flex items-start gap-2.5 text-[13px] mb-2.5',
+                    disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer',
+                  ].join(' ')}
+                >
+                  <input
+                    type="checkbox"
+                    checked={state}
+                    disabled={disabled}
+                    onChange={e => set(e.target.checked)}
+                    className="mt-0.5 accent-primary disabled:accent-text-subtle"
+                  />
                   <span className="flex-1">
-                    {label}
+                    <span className="inline-flex items-center gap-1.5">
+                      {label}
+                      {disabled && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-surface-2 border border-border text-[9.5px] font-bold text-text-muted">
+                          Pro
+                        </span>
+                      )}
+                    </span>
                     <div className="text-[11.5px] text-text-muted mt-0.5 truncate">{sub}</div>
                   </span>
                 </label>

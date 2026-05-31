@@ -34,12 +34,6 @@ const CATEGORIES: { id: TemplateCategory; label: string }[] = [
 export default function TemplateSelectorModal({ quote, onClose, mode = 'download', onSent }: Props) {
   const { user } = useAuth();
   const isBusiness = user?.plan === 'BUSINESS';
-  const availableTemplates = isBusiness
-    ? PDF_TEMPLATES
-    : PDF_TEMPLATES.filter(t => t.category === 'classique');
-  const availableCategories = isBusiness
-    ? CATEGORIES
-    : CATEGORIES.filter(cat => cat.id === 'tous' || cat.id === 'classique');
   const [selected, setSelected] = useState<TemplateId>('classique');
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>('tous');
   const [downloading, setDownloading] = useState(false);
@@ -55,7 +49,17 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
     fetchLogoBase64(url).then(setLogo).catch(() => setLogo(null));
   }, []);
 
+  function isTemplateLocked(category: TemplateCategory | string) {
+    return !isBusiness && category !== 'classique';
+  }
+
   function handleSelectTemplate(id: TemplateId) {
+    const tmpl = PDF_TEMPLATES.find(t => t.id === id);
+    if (tmpl && isTemplateLocked(tmpl.category)) {
+      setSendError('Ce modèle est réservé au plan Business');
+      return;
+    }
+    setSendError('');
     setSelected(id);
     setPreviewKey(k => k + 1);
   }
@@ -63,9 +67,10 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
   function handleSelectCategory(cat: TemplateCategory) {
     setActiveCategory(cat);
     // Si le template sélectionné n'est pas dans la nouvelle catégorie, sélectionner le premier visible
-    const filtered = cat === 'tous' ? availableTemplates : availableTemplates.filter(t => t.category === cat);
-    if (filtered.length > 0 && !filtered.find(t => t.id === selected)) {
-      handleSelectTemplate(filtered[0].id);
+    const filtered = cat === 'tous' ? PDF_TEMPLATES : PDF_TEMPLATES.filter(t => t.category === cat);
+    const unlocked = filtered.filter(t => !isTemplateLocked(t.category));
+    if (unlocked.length > 0 && !unlocked.find(t => t.id === selected)) {
+      handleSelectTemplate(unlocked[0].id);
     }
   }
 
@@ -113,10 +118,10 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
   }
 
   const filteredTemplates = activeCategory === 'tous'
-    ? availableTemplates
-    : availableTemplates.filter(t => t.category === activeCategory);
+    ? PDF_TEMPLATES
+    : PDF_TEMPLATES.filter(t => t.category === activeCategory);
 
-  const selectedTmpl = availableTemplates.find(t => t.id === selected) ?? availableTemplates[0];
+  const selectedTmpl = PDF_TEMPLATES.find(t => t.id === selected) ?? PDF_TEMPLATES[0];
   const logoReady = logo !== undefined;
   const preview = !logoReady ? (
     <div className="flex flex-col items-center gap-3 text-text-muted">
@@ -168,7 +173,9 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
             {/* Chips de catégories */}
             <div className="px-4 pt-4 pb-3 flex-shrink-0">
               <div className="flex flex-wrap gap-2">
-                {availableCategories.map(cat => (
+                {CATEGORIES.map(cat => {
+                  const lockedCategory = isTemplateLocked(cat.id) && cat.id !== 'tous';
+                  return (
                   <button
                     key={cat.id}
                     onClick={() => handleSelectCategory(cat.id)}
@@ -180,8 +187,9 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
                     ].join(' ')}
                   >
                     {cat.label}
+                    {lockedCategory && <span className="ml-1 text-[10px] opacity-70">Business</span>}
                   </button>
-                ))}
+                );})}
               </div>
             </div>
 
@@ -197,23 +205,33 @@ export default function TemplateSelectorModal({ quote, onClose, mode = 'download
               <div className="grid grid-cols-2 min-[420px]:grid-cols-3 lg:grid-cols-2 gap-3">
                 {filteredTemplates.map((tmpl) => {
                   const isSelected = selected === tmpl.id;
+                  const locked = isTemplateLocked(tmpl.category);
                   return (
                     <button
                       key={tmpl.id}
                       onClick={() => handleSelectTemplate(tmpl.id)}
+                      aria-disabled={locked}
                       className={[
-                        'flex flex-col items-center gap-2 p-1.5 rounded-xl border-2 transition-all duration-150',
+                        'flex flex-col items-center gap-2 p-1.5 rounded-xl border-2 transition-all duration-150 relative',
                         isSelected
                           ? 'border-primary bg-primary/5 shadow-sm'
                           : 'border-transparent hover:border-border-strong hover:bg-surface-2',
+                        locked ? 'opacity-75 cursor-not-allowed' : '',
                       ].join(' ')}
                     >
                       {/* Miniature A4 */}
                       <div
-                        className="w-full rounded-lg overflow-hidden shadow-sm border border-border"
+                        className="w-full rounded-lg overflow-hidden shadow-sm border border-border relative"
                         style={{ aspectRatio: '1 / 1.414' }}
                       >
                         {tmpl.thumbnail}
+                        {locked && (
+                          <div className="absolute inset-1.5 rounded-lg bg-black/45 backdrop-blur-[1px] flex items-center justify-center">
+                            <span className="px-2 py-1 rounded-full bg-white text-[10px] font-bold text-text shadow-sm">
+                              Business
+                            </span>
+                          </div>
+                        )}
                       </div>
                       {/* Nom + catégorie badge */}
                       <div className="w-full text-center">
