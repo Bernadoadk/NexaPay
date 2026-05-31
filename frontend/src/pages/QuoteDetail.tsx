@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quotesApi, paymentsApi } from '@/lib/api';
 import { fmtXOF, fmtDateFR, validUntil } from '@/lib/utils';
@@ -39,9 +39,11 @@ function Timeline({ events }: { events: { dot: string; title: string; time: stri
 
 export default function QuoteDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showSendTemplateModal, setShowSendTemplateModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const { data: quote, isLoading, isFetching } = useQuery<Quote>({
@@ -104,6 +106,13 @@ export default function QuoteDetail() {
     },
   });
 
+  useEffect(() => {
+    if (quote && searchParams.get('send') === '1') {
+      setShowSendTemplateModal(true);
+      navigate(`/quotes/${id}`, { replace: true });
+    }
+  }, [quote, searchParams, navigate, id]);
+
   if (isLoading || !quote) {
     return (
       <div className="flex-1 flex items-center justify-center h-full">
@@ -145,7 +154,7 @@ export default function QuoteDetail() {
 
   const moreMenuItems = [
     { label: 'Dupliquer', icon: <CopyIcon size={14} />, onClick: () => duplicateMutation.mutate() },
-    { label: 'Renvoyer par e-mail', icon: <SendIcon size={14} />, onClick: () => statusMutation.mutate('SENT') },
+    { label: 'Renvoyer par e-mail', icon: <SendIcon size={14} />, onClick: () => setShowSendTemplateModal(true) },
     { label: 'Supprimer', danger: true, icon: <TrashIcon size={14} />, onClick: handleDelete },
   ];
 
@@ -185,8 +194,7 @@ export default function QuoteDetail() {
           </Button>
           <Button
             variant="secondary" size="sm"
-            loading={statusMutation.isPending && statusMutation.variables === 'SENT'}
-            onClick={() => statusMutation.mutate('SENT')}
+            onClick={() => setShowSendTemplateModal(true)}
           >
             <SendIcon size={14} /> Renvoyer
           </Button>
@@ -581,6 +589,19 @@ export default function QuoteDetail() {
         <TemplateSelectorModal
           quote={quote}
           onClose={() => setShowTemplateModal(false)}
+        />
+      )}
+      {showSendTemplateModal && (
+        <TemplateSelectorModal
+          quote={quote}
+          mode="send"
+          onClose={() => setShowSendTemplateModal(false)}
+          onSent={() => {
+            qc.invalidateQueries({ queryKey: ['quote', id] });
+            qc.invalidateQueries({ queryKey: ['quotes'] });
+            qc.invalidateQueries({ queryKey: ['dashboard'] });
+            qc.invalidateQueries({ queryKey: ['notif-quotes'] });
+          }}
         />
       )}
     </div>

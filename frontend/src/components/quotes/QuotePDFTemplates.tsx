@@ -966,16 +966,20 @@ export const PDF_TEMPLATES: PDFTemplate[] = [
 // ─── Téléchargement ───────────────────────────────────────────────────────────
 
 export async function downloadWithTemplate(quote: Quote, templateId: TemplateId, userPlan?: string) {
-  const effectiveLogoUrl = getEffectiveLogo(quote);
-  const logo = effectiveLogoUrl ? await fetchLogoBase64(effectiveLogoUrl) : null;
-  const tmpl = PDF_TEMPLATES.find((t) => t.id === templateId) ?? PDF_TEMPLATES[0];
-  const showWatermark = !userPlan || userPlan === 'FREE';
-  const doc = tmpl.document(quote, logo, showWatermark);
-  const blob = await pdf(doc).toBlob();
+  const blob = await generatePdfBlobWithTemplate(quote, templateId, userPlan);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `${quote.number}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export async function generatePdfBlobWithTemplate(quote: Quote, templateId: TemplateId, userPlan?: string) {
+  const effectiveLogoUrl = getEffectiveLogo(quote);
+  const logo = effectiveLogoUrl ? await fetchLogoBase64(effectiveLogoUrl) : null;
+  const tmpl = PDF_TEMPLATES.find((t) => t.id === templateId) ?? PDF_TEMPLATES[0];
+  const showWatermark = !userPlan || userPlan === 'FREE';
+  const doc = tmpl.document(quote, logo, showWatermark);
+  return pdf(doc).toBlob();
 }

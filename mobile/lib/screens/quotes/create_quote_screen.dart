@@ -10,6 +10,8 @@ import '../../providers/clients_provider.dart';
 import '../../providers/products_provider.dart';
 import '../../providers/credits_provider.dart';
 import '../../services/ai_service.dart';
+import '../../services/quote_service.dart';
+import '../../widgets/template_selector_sheet.dart';
 import '../../widgets/avatar_widget.dart';
 
 class _LineItem {
@@ -128,7 +130,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     return '${buf.toString().split('').reversed.join()} F';
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit({required bool send}) async {
     if (_titleCtrl.text.trim().isEmpty) {
       setState(() => _error = 'Titre du devis requis');
       return;
@@ -146,7 +148,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
       _error = null;
     });
     try {
-      await context.read<QuotesProvider>().createQuote(
+      final created = await context.read<QuotesProvider>().createQuote(
             title: _titleCtrl.text.trim(),
             clientId: _selectedClient!.id,
             items: _lines
@@ -158,6 +160,24 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                 ? _notesCtrl.text.trim()
                 : null,
           );
+      if (!mounted) return;
+      if (!send) {
+        Navigator.pop(context);
+        return;
+      }
+      final fullQuote = await QuoteService.getById(created.id);
+      if (!mounted) return;
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (_) => TemplateSelectorSheet(
+          quote: fullQuote,
+          mode: TemplateSelectorMode.sendEmail,
+        ),
+      );
       if (mounted) Navigator.pop(context);
     } on DioException catch (e) {
       setState(() =>
@@ -930,7 +950,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
         children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: _loading ? null : _submit,
+              onPressed: _loading ? null : () => _submit(send: false),
               style: OutlinedButton.styleFrom(
                 foregroundColor: context.appText,
                 side: BorderSide(color: context.appBorder),
@@ -945,7 +965,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
           Expanded(
             flex: 2,
             child: ElevatedButton.icon(
-              onPressed: _loading ? null : _submit,
+              onPressed: _loading ? null : () => _submit(send: true),
               icon: _loading
                   ? const SizedBox(
                       width: 16,

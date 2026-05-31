@@ -42,6 +42,20 @@ class QuoteService {
     return Quote.fromJson(res.data);
   }
 
+  static Future<Quote> sendEmail({
+    required String id,
+    required String pdfBase64,
+    required String templateId,
+    String? templateName,
+  }) async {
+    final res = await ApiClient.instance.post('/quotes/$id/send-email', data: {
+      'pdfBase64': pdfBase64,
+      'templateId': templateId,
+      if (templateName != null) 'templateName': templateName,
+    });
+    return Quote.fromJson(res.data);
+  }
+
   static Future<Quote> duplicate(String id) async {
     final res = await ApiClient.instance.post('/quotes/$id/duplicate');
     return Quote.fromJson(res.data);

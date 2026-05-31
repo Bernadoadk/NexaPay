@@ -187,18 +187,14 @@ export default function QuoteCreate() {
         res = await quotesApi.create(payload);
       }
 
-      // If "Envoyer", change status to SENT immediately
-      if (!asDraft && res.data.id) {
-        await quotesApi.updateStatus(res.data.id, 'SENT');
-      }
       return res;
     },
-    onSuccess: res => {
+    onSuccess: (res, asDraft) => {
       setSaveError('');
       qc.invalidateQueries({ queryKey: ['quotes'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['notif-quotes'] });
-      navigate(`/quotes/${res.data.id}`);
+      navigate(`/quotes/${res.data.id}${asDraft ? '' : '?send=1'}`);
     },
     onError: (err: Error) => {
       setSaveError(err.message || 'Une erreur est survenue. Vérifiez votre connexion.');

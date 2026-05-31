@@ -327,8 +327,12 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            _statusOption(Icons.send_rounded, 'Marquer comme Envoyé',
-                const Color(0xFF2563EB), () => _updateStatus('SENT')),
+            _statusOption(Icons.send_rounded, 'Envoyer par e-mail',
+                const Color(0xFF2563EB), () {
+              Navigator.pop(context);
+              final q = _quote;
+              if (q != null) _showSendTemplateSelector(q);
+            }),
             _statusOption(Icons.check_circle_outline_rounded, 'Marquer comme Payé',
                 AppColors.primary, () => _updateStatus('PAID')),
             _statusOption(Icons.warning_amber_rounded, 'Marquer en retard',
@@ -364,6 +368,23 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => TemplateSelectorSheet(quote: q),
+    );
+  }
+
+  void _showSendTemplateSelector(Quote q) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => TemplateSelectorSheet(
+        quote: q,
+        mode: TemplateSelectorMode.sendEmail,
+        onSent: (updated) {
+          if (mounted) setState(() => _quote = updated);
+        },
+      ),
     );
   }
 
@@ -753,6 +774,21 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF25D366),
                     side: const BorderSide(color: Color(0xFF25D366)),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _showSendTemplateSelector(q),
+                  icon: const Icon(Icons.send_rounded, size: 16),
+                  label: const Text('E-mail'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2563EB),
+                    side: const BorderSide(color: Color(0xFF2563EB)),
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),

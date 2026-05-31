@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { PDFViewer } from '@react-pdf/renderer';
 import { useAuth } from '@/contexts/AuthContext';
+import { quotesApi } from '@/lib/api';
 import type { Quote } from '@/types';
 import Button from '@/components/ui/Button';
-import { DownloadIcon, EyeIcon } from '@/components/ui/Icon';
+import { DownloadIcon, EyeIcon, SendIcon } from '@/components/ui/Icon';
 import { X } from 'lucide-react';
 import {
   PDF_TEMPLATES,
   downloadWithTemplate,
+  generatePdfBlobWithTemplate,
   getEffectiveLogo,
   fetchLogoBase64,
   type TemplateId,
@@ -17,6 +19,8 @@ import {
 interface Props {
   quote: Quote;
   onClose: () => void;
+  mode?: 'download' | 'send';
+  onSent?: (quote: Quote) => void;
 }
 
 const CATEGORIES: { id: TemplateCategory; label: string }[] = [
@@ -27,11 +31,13 @@ const CATEGORIES: { id: TemplateCategory; label: string }[] = [
   { id: 'moderne', label: 'Moderne' },
 ];
 
-export default function TemplateSelectorModal({ quote, onClose }: Props) {
+export default function TemplateSelectorModal({ quote, onClose, mode = 'download', onSent }: Props) {
   const { user } = useAuth();
   const [selected, setSelected] = useState<TemplateId>('classique');
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>('tous');
   const [downloading, setDownloading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const [logo, setLogo] = useState<string | null | undefined>(undefined);
   const [previewKey, setPreviewKey] = useState(0);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
@@ -63,6 +69,35 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
       onClose();
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function blobToBase64(blob: Blob) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result).split(',')[1] ?? '');
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function handleSend() {
+    setSending(true);
+    setSendError('');
+    try {
+      const blob = await generatePdfBlobWithTemplate(quote, selected, user?.plan);
+      const pdfBase64 = await blobToBase64(blob);
+      const res = await quotesApi.sendEmail(quote.id, {
+        pdfBase64,
+        templateId: selected,
+        templateName: selectedTmpl.name,
+      });
+      onSent?.(res.data);
+      onClose();
+    } catch (err: any) {
+      setSendError(err.response?.data?.message || 'Impossible d’envoyer le devis par e-mail');
+    } finally {
+      setSending(false);
     }
   }
 
@@ -103,7 +138,9 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
           <div className="min-w-0 pr-3">
             <div className="font-semibold text-[15px]">Choisir un template</div>
             <div className="text-[12px] text-text-muted mt-0.5">
-              Sélectionnez un modèle qui reflète votre identité professionnelle
+              {mode === 'send'
+                ? 'Ce modèle sera généré en PDF puis envoyé au client'
+                : 'Sélectionnez un modèle qui reflète votre identité professionnelle'}
             </div>
           </div>
           <button
@@ -210,6 +247,9 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
             Modèle sélectionné :{' '}
             <span className="font-semibold text-text">{selectedTmpl.name}</span>
             <span className="ml-1 text-[11px] opacity-60 capitalize">({selectedTmpl.category})</span>
+            {sendError && (
+              <div className="mt-1 text-[12px] text-danger font-medium">{sendError}</div>
+            )}
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <Button
@@ -228,13 +268,13 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
             <Button
               variant="primary"
               size="sm"
-              loading={downloading}
+              loading={mode === 'send' ? sending : downloading}
               disabled={!logoReady}
-              onClick={handleDownload}
+              onClick={mode === 'send' ? handleSend : handleDownload}
               className="flex-1 sm:flex-none"
             >
-              <DownloadIcon size={13} />
-              Télécharger PDF
+              {mode === 'send' ? <SendIcon size={13} /> : <DownloadIcon size={13} />}
+              {mode === 'send' ? 'Envoyer le devis' : 'Télécharger PDF'}
             </Button>
           </div>
         </div>
@@ -271,13 +311,13 @@ export default function TemplateSelectorModal({ quote, onClose }: Props) {
             <Button
               variant="primary"
               size="sm"
-              loading={downloading}
+              loading={mode === 'send' ? sending : downloading}
               disabled={!logoReady}
-              onClick={handleDownload}
+              onClick={mode === 'send' ? handleSend : handleDownload}
               className="flex-1"
             >
-              <DownloadIcon size={13} />
-              Télécharger
+              {mode === 'send' ? <SendIcon size={13} /> : <DownloadIcon size={13} />}
+              {mode === 'send' ? 'Envoyer' : 'Télécharger'}
             </Button>
           </div>
         </div>

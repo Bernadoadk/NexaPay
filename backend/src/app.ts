@@ -36,7 +36,7 @@ app.use(cors({
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({
-  limit: '1mb',
+  limit: '10mb',
   verify: (req: any, _res, buf) => {
     req.rawBody = Buffer.from(buf);
   },

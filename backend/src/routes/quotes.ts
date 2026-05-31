@@ -4,6 +4,7 @@ import { PrismaClient, QuoteStatus } from '@prisma/client';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { generateQuoteNumber } from '../utils/quoteNumber';
 import { syncQuoteFromFedapay } from '../lib/quoteSync';
+import { sendQuoteEmail } from '../utils/email';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -221,6 +222,62 @@ router.patch('/:id/status', async (req: AuthRequest, res): Promise<void> => {
     include: { client: true, items: { orderBy: { order: 'asc' } } },
   });
   res.json(updated);
+});
+
+router.post('/:id/send-email', async (req: AuthRequest, res): Promise<void> => {
+  const quoteId = String(req.params.id);
+  const { pdfBase64, templateId, templateName } = req.body ?? {};
+
+  if (!pdfBase64 || typeof pdfBase64 !== 'string') {
+    res.status(400).json({ message: 'PDF manquant pour l’envoi du devis' });
+    return;
+  }
+
+  const quote = await prisma.quote.findFirst({
+    where: { id: quoteId, userId: req.userId },
+    include: {
+      client: true,
+      items: { orderBy: { order: 'asc' } },
+      user: { select: { name: true, companyName: true, email: true } },
+    },
+  });
+  if (!quote) { res.status(404).json({ message: 'Devis introuvable' }); return; }
+  if (!quote.client?.email) {
+    res.status(400).json({ message: 'Ce client n’a pas d’adresse e-mail' });
+    return;
+  }
+
+  const cleanBase64 = pdfBase64.includes(',')
+    ? pdfBase64.split(',').pop()!
+    : pdfBase64;
+  const pdfBuffer = Buffer.from(cleanBase64, 'base64');
+  if (!pdfBuffer.length) {
+    res.status(400).json({ message: 'PDF invalide pour l’envoi du devis' });
+    return;
+  }
+
+  try {
+    await sendQuoteEmail({
+      to: quote.client.email,
+      clientName: quote.client.contact || quote.client.name,
+      quoteNumber: quote.number,
+      quoteTitle: quote.title,
+      total: quote.total,
+      companyName: quote.user.companyName || quote.user.name || 'NexaPay',
+      templateName: templateName || templateId,
+      pdfBuffer,
+    });
+
+    const updated = await prisma.quote.update({
+      where: { id: quoteId },
+      data: { status: 'SENT', sentAt: new Date() },
+      include: { client: true, items: { orderBy: { order: 'asc' } } },
+    });
+    res.json(updated);
+  } catch (err: any) {
+    console.error('[QuoteEmail] Envoi échoué:', err?.message ?? err);
+    res.status(502).json({ message: `Envoi e-mail échoué : ${err?.message ?? 'SMTP indisponible'}` });
+  }
 });
 
 router.post('/:id/duplicate', async (req: AuthRequest, res): Promise<void> => {

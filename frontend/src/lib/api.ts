@@ -68,6 +68,8 @@ export const quotesApi = {
   create: (data: object) => api.post('/quotes', data),
   update: (id: string, data: object) => api.put(`/quotes/${id}`, data),
   updateStatus: (id: string, status: string) => api.patch(`/quotes/${id}/status`, { status }),
+  sendEmail: (id: string, data: { pdfBase64: string; templateId: string; templateName?: string }) =>
+    api.post(`/quotes/${id}/send-email`, data),
   delete: (id: string) => api.delete(`/quotes/${id}`),
   duplicate: (id: string) => api.post(`/quotes/${id}/duplicate`),
   checkPayment: (id: string) => api.post(`/quotes/${id}/check-payment`),

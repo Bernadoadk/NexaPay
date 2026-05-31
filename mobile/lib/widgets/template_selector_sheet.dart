@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,9 @@ import '../theme.dart';
 import '../models/quote.dart';
 import '../providers/auth_provider.dart';
 import '../services/quote_pdf_service.dart';
+import '../services/quote_service.dart';
+
+enum TemplateSelectorMode { exportPdf, sendEmail }
 
 // ─── Catégories ───────────────────────────────────────────────────────────────
 
@@ -21,7 +25,15 @@ const _categories = [
 
 class TemplateSelectorSheet extends StatefulWidget {
   final Quote quote;
-  const TemplateSelectorSheet({super.key, required this.quote});
+  final TemplateSelectorMode mode;
+  final ValueChanged<Quote>? onSent;
+
+  const TemplateSelectorSheet({
+    super.key,
+    required this.quote,
+    this.mode = TemplateSelectorMode.exportPdf,
+    this.onSent,
+  });
 
   @override
   State<TemplateSelectorSheet> createState() => _TemplateSelectorSheetState();
@@ -31,6 +43,7 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
   String _selectedId = 'classique';
   String _activeCategory = 'tous';
   bool _generating = false;
+  String? _sendError;
 
   // Cache des PDF générés pour ne pas re-générer à chaque tap
   final Map<String, Uint8List> _previewCache = {};
@@ -92,6 +105,42 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
     }
   }
 
+  Future<void> _sendEmail() async {
+    setState(() {
+      _generating = true;
+      _sendError = null;
+    });
+    try {
+      final bytes = _previewCache[_selectedId] ??
+          await QuotePdfService.generate(widget.quote, _selectedId,
+              plan: _currentPlan);
+      final updated = await QuoteService.sendEmail(
+        id: widget.quote.id,
+        pdfBase64: base64Encode(bytes),
+        templateId: _selectedId,
+        templateName: _selectedTemplate.name,
+      );
+      widget.onSent?.call(updated);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Devis envoyé par e-mail')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _sendError = 'Impossible d’envoyer le devis par e-mail');
+      }
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  Future<void> _confirm() {
+    if (widget.mode == TemplateSelectorMode.sendEmail) return _sendEmail();
+    return _export();
+  }
+
   void _openPreview() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -99,8 +148,9 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
         builder: (_) => _TemplatePreviewPage(
           template: _selectedTemplate,
           buildPreview: () => _getPreview(_selectedId),
-          onExport: _export,
+          onExport: _confirm,
           generating: _generating,
+          mode: widget.mode,
         ),
       ),
     );
@@ -150,7 +200,9 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        'Sélectionnez un modèle qui vous correspond',
+                        widget.mode == TemplateSelectorMode.sendEmail
+                            ? 'Ce modèle sera envoyé au client'
+                            : 'Sélectionnez un modèle qui vous correspond',
                         style: TextStyle(fontSize: 11, color: context.appTextMuted),
                       ),
                     ],
@@ -365,22 +417,47 @@ class _TemplateSelectorSheetState extends State<TemplateSelectorSheet> {
           // ── Bouton export ──
           Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPad + 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _generating ? null : _export,
-                icon: _generating
-                    ? const SizedBox(
-                        width: 16, height: 16,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Icon(Icons.picture_as_pdf_rounded, size: 18),
-                label: Text(_generating ? 'Génération…' : 'Exporter ce modèle'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_sendError != null) ...[
+                  Text(
+                    _sendError!,
+                    style: TextStyle(
+                      color: AppColors.statusOverdue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _generating ? null : _confirm,
+                    icon: _generating
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : Icon(
+                            widget.mode == TemplateSelectorMode.sendEmail
+                                ? Icons.send_rounded
+                                : Icons.picture_as_pdf_rounded,
+                            size: 18,
+                          ),
+                    label: Text(_generating
+                        ? 'Génération…'
+                        : widget.mode == TemplateSelectorMode.sendEmail
+                            ? 'Envoyer ce modèle'
+                            : 'Exporter ce modèle'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -394,12 +471,14 @@ class _TemplatePreviewPage extends StatelessWidget {
   final Future<Uint8List> Function() buildPreview;
   final Future<void> Function() onExport;
   final bool generating;
+  final TemplateSelectorMode mode;
 
   const _TemplatePreviewPage({
     required this.template,
     required this.buildPreview,
     required this.onExport,
     required this.generating,
+    required this.mode,
   });
 
   @override
@@ -498,8 +577,17 @@ class _TemplatePreviewPage extends StatelessWidget {
                           height: 16,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Icon(Icons.picture_as_pdf_rounded, size: 18),
-                  label: Text(generating ? 'Génération…' : 'Exporter'),
+                      : Icon(
+                          mode == TemplateSelectorMode.sendEmail
+                              ? Icons.send_rounded
+                              : Icons.picture_as_pdf_rounded,
+                          size: 18,
+                        ),
+                  label: Text(generating
+                      ? 'Génération…'
+                      : mode == TemplateSelectorMode.sendEmail
+                          ? 'Envoyer'
+                          : 'Exporter'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
