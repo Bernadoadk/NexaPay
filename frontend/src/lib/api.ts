@@ -75,6 +75,16 @@ export const quotesApi = {
   checkPayment: (id: string) => api.post(`/quotes/${id}/check-payment`),
 };
 
+export const quoteTemplatesApi = {
+  list: () => api.get('/quote-templates'),
+  create: (data: object) => api.post('/quote-templates', data),
+  createFromQuote: (quoteId: string, data: { name?: string; category?: string; description?: string }) =>
+    api.post(`/quote-templates/from-quote/${quoteId}`, data),
+  update: (id: string, data: object) => api.put(`/quote-templates/${id}`, data),
+  markUsed: (id: string) => api.post(`/quote-templates/${id}/use`),
+  delete: (id: string) => api.delete(`/quote-templates/${id}`),
+};
+
 export const productsApi = {
   list: (params?: { search?: string; sort?: string; archived?: '0' | '1' | 'all' }) =>
     api.get('/products', { params }),

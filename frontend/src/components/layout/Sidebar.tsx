@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { to: '/quotes', label: 'Devis', Icon: FileIcon, badge: null },
   { to: '/clients', label: 'Clients', Icon: UsersIcon },
   { to: '/products', label: 'Produits & services', Icon: ReceiptIcon },
+  { to: '/templates', label: 'Templates', Icon: ReceiptIcon },
   { to: '/settings', label: 'Réglages', Icon: SettingsIcon },
 ];
 

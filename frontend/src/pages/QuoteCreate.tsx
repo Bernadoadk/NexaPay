@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { quotesApi, clientsApi, productsApi, aiApi, creditsApi, paymentsApi } from '@/lib/api';
+import { quotesApi, clientsApi, productsApi, aiApi, creditsApi, paymentsApi, quoteTemplatesApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { momoLabel } from '@/lib/phone';
 import { fmtXOF } from '@/lib/utils';
-import type { Client, QuoteItem, Product, Quote } from '@/types';
+import type { Client, QuoteItem, Product, Quote, QuoteTemplate } from '@/types';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
+import SaveQuoteTemplateModal from '@/components/quotes/SaveQuoteTemplateModal';
 import {
   ChevronRightIcon, TrashIcon, PlusIcon, ReceiptIcon,
   SendIcon, ChevronDownIcon, CheckIcon, SearchIcon,
+  CopyIcon, XIcon,
 } from '@/components/ui/Icon';
 
 interface LineItem extends QuoteItem { _key: number; productId?: string | null; unit?: string | null }
@@ -33,6 +35,10 @@ export default function QuoteCreate() {
     queryKey: ['products', 'picker'],
     // Picker only ever wants active items.
     queryFn: () => productsApi.list({ archived: '0' }).then(r => r.data),
+  });
+  const { data: templates = [] } = useQuery<QuoteTemplate[]>({
+    queryKey: ['quote-templates'],
+    queryFn: () => quoteTemplatesApi.list().then(r => r.data),
   });
   const { data: existingQuote } = useQuery<Quote>({
     queryKey: ['quote', id],
@@ -58,6 +64,9 @@ export default function QuoteCreate() {
   const [sendWhatsapp, setSendWhatsapp] = useState(true);
   const [sendMomo, setSendMomo] = useState(false);
   const [showProductMenu, setShowProductMenu] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const appliedTemplateRef = useRef('');
   const canUseMomo = user?.plan === 'PRO' || user?.plan === 'BUSINESS';
 
   // Initialise depuis l'existant (edit) ou depuis le paramètre d'URL ?clientId=
@@ -117,6 +126,32 @@ export default function QuoteCreate() {
     }]);
     setShowProductMenu(false);
   }
+
+  async function applyTemplate(template: QuoteTemplate) {
+    setTitle(template.title);
+    setNotes(template.notes ?? DEFAULT_NOTES);
+    setTaxRate(template.taxRate);
+    setDiscount(template.discount);
+    setValidDays(template.validDays);
+    setItems((template.items ?? []).map((it, i) => ({
+      ...it,
+      _key: Date.now() + i,
+      total: it.quantity * it.unitPrice,
+    })));
+    setShowTemplatePicker(false);
+    quoteTemplatesApi.markUsed(template.id)
+      .then(() => qc.invalidateQueries({ queryKey: ['quote-templates'] }))
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    const templateId = searchParams.get('templateId');
+    if (!templateId || isEdit || appliedTemplateRef.current === templateId) return;
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+    appliedTemplateRef.current = templateId;
+    applyTemplate(template);
+  }, [templates, searchParams, isEdit]);
 
   async function handleAiGenerate() {
     if (!aiDescription.trim()) return;
@@ -210,6 +245,34 @@ export default function QuoteCreate() {
     },
   });
 
+  const saveTemplateMutation = useMutation({
+    mutationFn: (meta: { name: string; category?: string; description?: string }) => {
+      if (!title.trim()) throw new Error("L'objet du devis est obligatoire pour créer un template");
+      if (items.length === 0) throw new Error('Ajoutez au moins une ligne au template');
+      return quoteTemplatesApi.create({
+        name: meta.name.trim(),
+        category: meta.category?.trim() || null,
+        description: meta.description?.trim() || null,
+        title: title.trim(),
+        notes,
+        taxRate,
+        discount,
+        validDays,
+        items: items.map(({ _key, id: _id, ...it }) => ({
+          description: it.description,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          unit: it.unit ?? null,
+          productId: it.productId ?? null,
+        })),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quote-templates'] });
+      setShowSaveTemplateModal(false);
+    },
+  });
+
   const selectedClient = clients.find(c => c.id === clientId);
 
   return (
@@ -244,6 +307,12 @@ export default function QuoteCreate() {
               <div className="text-[12px] text-danger font-medium px-1">{saveError}</div>
             )}
             <div className="flex gap-2 flex-wrap">
+              <Button variant="ghost" onClick={() => setShowTemplatePicker(true)}>
+                <ReceiptIcon size={14} /> Depuis template
+              </Button>
+              <Button variant="secondary" onClick={() => setShowSaveTemplateModal(true)}>
+                <CopyIcon size={14} /> Enregistrer template
+              </Button>
               <Button variant="ghost" onClick={() => navigate(-1)}>Annuler</Button>
               <Button variant="secondary" loading={mutation.isPending} onClick={() => mutation.mutate(true)}>
                 Enregistrer brouillon
@@ -328,6 +397,13 @@ export default function QuoteCreate() {
             <div className="bg-surface border border-border rounded shadow-sm overflow-hidden">
               <div className="px-3.5 lg:px-5 py-3 lg:py-4 flex items-center border-b border-border">
                 <div className="flex-1 text-[13px] font-semibold">Produits & services</div>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplatePicker(true)}
+                  className="flex items-center gap-1.5 h-8 px-3 text-[13px] text-text-muted rounded hover:bg-surface-2 transition-colors"
+                >
+                  <ReceiptIcon size={13} /> Templates
+                </button>
                 {products.length > 0 && (
                   <ProductPicker
                     products={products}
@@ -585,6 +661,34 @@ export default function QuoteCreate() {
               ))}
             </div>
 
+            {/* Templates */}
+            <div className="bg-surface border border-border rounded shadow-sm p-3.5 lg:p-[18px]">
+              <div className="text-[13px] font-semibold mb-1">Templates</div>
+              <div className="text-[11.5px] text-text-muted mb-3 leading-snug">
+                Réutilisez une configuration complète ou sauvegardez celle-ci pour plus tard.
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setShowTemplatePicker(true)}
+                >
+                  <ReceiptIcon size={13} /> Utiliser
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setShowSaveTemplateModal(true)}
+                >
+                  <CopyIcon size={13} /> Sauver
+                </Button>
+              </div>
+            </div>
+
             {/* Conformité */}
             <div className="bg-primary-soft border border-primary-soft-2 rounded p-3.5">
               <div className="flex gap-2.5">
@@ -616,6 +720,148 @@ export default function QuoteCreate() {
         >
           <SendIcon size={14} /> Envoyer
         </Button>
+      </div>
+
+      {showTemplatePicker && (
+        <QuoteTemplatePicker
+          templates={templates}
+          onApply={applyTemplate}
+          onClose={() => setShowTemplatePicker(false)}
+        />
+      )}
+
+      {showSaveTemplateModal && (
+        <SaveQuoteTemplateModal
+          defaultName={title || existingQuote?.title || ''}
+          loading={saveTemplateMutation.isPending}
+          error={(saveTemplateMutation.error as any)?.response?.data?.message || (saveTemplateMutation.error as any)?.message}
+          onClose={() => setShowSaveTemplateModal(false)}
+          onSave={(meta) => saveTemplateMutation.mutate(meta)}
+        />
+      )}
+    </div>
+  );
+}
+
+function QuoteTemplatePicker({
+  templates,
+  onApply,
+  onClose,
+}: {
+  templates: QuoteTemplate[];
+  onApply: (template: QuoteTemplate) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter(template =>
+      template.name.toLowerCase().includes(q) ||
+      template.title.toLowerCase().includes(q) ||
+      (template.category ?? '').toLowerCase().includes(q) ||
+      (template.description ?? '').toLowerCase().includes(q),
+    );
+  }, [templates, search]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, QuoteTemplate[]>();
+    filtered.forEach(template => {
+      const key = template.category?.trim() || 'Sans catégorie';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(template);
+    });
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      if (a === 'Sans catégorie') return 1;
+      if (b === 'Sans catégorie') return -1;
+      return a.localeCompare(b, 'fr');
+    });
+  }, [filtered]);
+
+  return (
+    <div className="fixed inset-0 z-40 bg-black/30 flex items-end lg:items-center justify-center p-0 lg:p-6" onClick={onClose}>
+      <div
+        className="w-full lg:max-w-[760px] max-h-[88vh] bg-surface rounded-t-2xl lg:rounded-lg shadow-xl border border-border flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-4 lg:px-5 py-4 border-b border-border flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary-soft grid place-items-center text-primary-hover flex-shrink-0">
+            <ReceiptIcon size={17} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] font-semibold">Créer depuis un template</div>
+            <div className="text-[12px] text-text-muted">{templates.length} template{templates.length > 1 ? 's' : ''} enregistré{templates.length > 1 ? 's' : ''}</div>
+          </div>
+          <button type="button" onClick={onClose} className="w-8 h-8 grid place-items-center rounded hover:bg-surface-2 text-text-muted">
+            <XIcon size={16} />
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-border">
+          <div className="relative">
+            <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher par nom, objet ou catégorie..."
+              className="w-full h-10 pl-9 pr-3 rounded-sm border border-border-strong bg-surface text-[14px] focus:outline-none focus:border-primary focus:ring-3 focus:ring-primary-soft"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto scrollbar-thin p-3 lg:p-4">
+          {templates.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="w-11 h-11 rounded-xl bg-surface-2 grid place-items-center mx-auto mb-3 text-text-muted">
+                <ReceiptIcon size={20} />
+              </div>
+              <div className="text-[14px] font-semibold">Aucun template pour le moment</div>
+              <div className="text-[12.5px] text-text-muted mt-1">Créez un devis type, puis sauvegardez-le comme template.</div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-10 text-center text-[13px] text-text-muted">Aucun template ne correspond à "{search}".</div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {grouped.map(([category, categoryTemplates]) => (
+                <div key={category}>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-text-muted mb-2 px-1">
+                    {category} · {categoryTemplates.length}
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                    {categoryTemplates.map(template => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => onApply(template)}
+                        className="text-left p-3.5 rounded border border-border hover:border-primary/50 hover:bg-primary-soft/40 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-surface-2 grid place-items-center text-primary-hover flex-shrink-0">
+                            <ReceiptIcon size={15} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13.5px] font-semibold truncate">{template.name}</div>
+                            <div className="text-[12px] text-text-muted truncate mt-0.5">{template.title}</div>
+                          </div>
+                          <div className="font-mono text-[12px] font-semibold whitespace-nowrap">{fmtXOF(template.total)}</div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-[11.5px] text-text-muted">
+                          <span>{template.items?.length ?? 0} ligne{(template.items?.length ?? 0) > 1 ? 's' : ''}</span>
+                          <span>{template.usageCount} utilisation{template.usageCount > 1 ? 's' : ''}</span>
+                        </div>
+                        {template.description && (
+                          <div className="mt-2 text-[11.5px] text-text-muted line-clamp-2">{template.description}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

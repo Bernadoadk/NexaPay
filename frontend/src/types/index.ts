@@ -114,6 +114,26 @@ export interface Quote {
   updatedAt: string;
 }
 
+export interface QuoteTemplate {
+  id: string;
+  name: string;
+  category?: string | null;
+  description?: string | null;
+  title: string;
+  notes?: string | null;
+  taxRate: number;
+  discount: number;
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  validDays: number;
+  usageCount: number;
+  lastUsedAt?: string | null;
+  items?: QuoteItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Product {
   id: string;
   name: string;

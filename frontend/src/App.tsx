@@ -11,6 +11,7 @@ import QuoteCreate from '@/pages/QuoteCreate';
 import QuoteDetail from '@/pages/QuoteDetail';
 import Clients from '@/pages/Clients';
 import Products from '@/pages/Products';
+import Templates from '@/pages/Templates';
 import Settings from '@/pages/Settings';
 import Pricing from '@/pages/Pricing';
 import Payouts from '@/pages/Payouts';
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="quotes/:id/edit" element={<QuoteCreate />} />
         <Route path="clients" element={<Clients />} />
         <Route path="products" element={<Products />} />
+        <Route path="templates" element={<Templates />} />
         <Route path="settings" element={<Settings />} />
         <Route path="payouts" element={<Payouts />} />
         <Route path="pricing" element={<Pricing />} />

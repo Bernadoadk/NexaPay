@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { quotesApi, paymentsApi } from '@/lib/api';
+import { quotesApi, paymentsApi, quoteTemplatesApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtXOF, fmtDateFR, validUntil } from '@/lib/utils';
 import type { Quote } from '@/types';
@@ -9,6 +9,7 @@ import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import TemplateSelectorModal from '@/components/quotes/TemplateSelectorModal';
+import SaveQuoteTemplateModal, { type SaveQuoteTemplateMeta } from '@/components/quotes/SaveQuoteTemplateModal';
 import ContextMenu from '@/components/ui/ContextMenu';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
@@ -47,6 +48,7 @@ export default function QuoteDetail() {
   const { user: authUser } = useAuth();
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSendTemplateModal, setShowSendTemplateModal] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const { confirm, confirmDialog } = useConfirmDialog();
 
@@ -78,6 +80,14 @@ export default function QuoteDetail() {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['quotes'] });
       navigate(`/quotes/${res.data.id}`);
+    },
+  });
+
+  const saveTemplateMutation = useMutation({
+    mutationFn: (meta: SaveQuoteTemplateMeta) => quoteTemplatesApi.createFromQuote(id!, meta),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quote-templates'] });
+      setShowSaveTemplateModal(false);
     },
   });
 
@@ -176,6 +186,7 @@ export default function QuoteDetail() {
   }
 
   const moreMenuItems = [
+    { label: 'Enregistrer comme template', icon: <CopyIcon size={14} />, onClick: () => setShowSaveTemplateModal(true) },
     { label: 'Dupliquer', icon: <CopyIcon size={14} />, onClick: () => duplicateMutation.mutate() },
     { label: 'Renvoyer par e-mail', icon: <SendIcon size={14} />, onClick: () => setShowSendTemplateModal(true) },
     { label: 'Supprimer', danger: true, icon: <TrashIcon size={14} />, onClick: handleDelete },
@@ -205,6 +216,13 @@ export default function QuoteDetail() {
 
         {/* DESKTOP actions */}
         <div className="hidden lg:flex items-center gap-3">
+          <Button
+            variant="ghost" size="sm"
+            loading={saveTemplateMutation.isPending}
+            onClick={() => setShowSaveTemplateModal(true)}
+          >
+            <CopyIcon size={14} /> Enregistrer comme template
+          </Button>
           <Button
             variant="ghost" size="sm"
             loading={duplicateMutation.isPending}
@@ -617,6 +635,15 @@ export default function QuoteDetail() {
             qc.invalidateQueries({ queryKey: ['dashboard'] });
             qc.invalidateQueries({ queryKey: ['notif-quotes'] });
           }}
+        />
+      )}
+      {showSaveTemplateModal && (
+        <SaveQuoteTemplateModal
+          defaultName={quote.title}
+          loading={saveTemplateMutation.isPending}
+          error={(saveTemplateMutation.error as any)?.response?.data?.message || (saveTemplateMutation.error as any)?.message}
+          onClose={() => setShowSaveTemplateModal(false)}
+          onSave={(meta) => saveTemplateMutation.mutate(meta)}
         />
       )}
       {confirmDialog}

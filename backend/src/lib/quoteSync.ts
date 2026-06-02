@@ -25,18 +25,49 @@ async function fedapayReq(method: string, path: string, body?: object) {
   return data;
 }
 
+function getTx(data: any) {
+  return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
+}
+
+function getTxAmount(tx: any): number {
+  return Number(tx?.amount ?? tx?.amount_debited ?? tx?.amount_transferred ?? 0);
+}
+
 async function fedapayTransfer(phone: string, country: string, amount: number, description: string) {
-  const txData: any = await fedapayReq('POST', '/transfers', {
+  const cleanPhone = phone.replace(/\s/g, '');
+  const payoutData: any = await fedapayReq('POST', '/payouts', {
     amount,
     description,
+    mode: 'mtn_open',
     currency: { iso: 'XOF' },
-    phone_number: { number: phone.replace(/\s/g, ''), country },
+    customer: {
+      firstname: 'NexaPay',
+      lastname: 'Merchant',
+      email: `payout-${cleanPhone.replace(/\D/g, '')}@nexapay.app`,
+      phone_number: { number: cleanPhone, country },
+    },
   });
-  const transfer = txData?.['v1/transfer'] ?? txData?.v1?.transfer ?? txData;
-  const transferId = transfer?.id;
-  if (!transferId) throw new Error('Transfer ID manquant dans la réponse Fedapay');
-  await fedapayReq('PUT', `/transfers/${transferId}/send`, {});
-  return transferId;
+  const payout = payoutData?.['v1/payout'] ?? payoutData?.v1?.payout ?? payoutData;
+  const payoutId = payout?.id;
+  if (!payoutId) throw new Error('Payout ID manquant dans la réponse Fedapay');
+
+  const startedData: any = await fedapayReq('PUT', '/payouts/start', [{
+    id: payoutId,
+    phone_number: { number: cleanPhone, country },
+  }]);
+  const started = Array.isArray(startedData) ? startedData[0] : startedData?.[0] ?? startedData;
+  return started?.id ?? payoutId;
+}
+
+function assertQuoteTransactionMatches(tx: any, expectedAmount: number, expectedDescription: string) {
+  const txAmount = getTxAmount(tx);
+  const txDescription = String(tx?.description ?? '');
+  if (txAmount !== expectedAmount || txDescription !== expectedDescription) {
+    throw Object.assign(
+      new Error('Transaction FedaPay incohérente avec le devis'),
+      { status: 400 },
+    );
+  }
 }
 
 export interface SyncResult {
@@ -81,8 +112,15 @@ export async function syncQuoteFromFedapay(
   let fedapayStatus = '';
   try {
     const txData: any = await fedapayReq('GET', `/transactions/${quote.paymentRef}`);
-    const tx = txData?.['v1/transaction'] ?? txData?.v1?.transaction ?? txData;
+    const tx = getTx(txData);
     fedapayStatus = tx?.status ?? '';
+    if (fedapayStatus === 'approved') {
+      assertQuoteTransactionMatches(
+        tx,
+        Math.round(quote.total),
+        `${quote.number} — ${quote.title}`,
+      );
+    }
   } catch (err: any) {
     console.error(`[syncQuote] Fedapay GET ${quote.paymentRef} échec:`, err.message);
     return { changed: false, status: quote.status, fedapayStatus: 'error' };
@@ -92,11 +130,15 @@ export async function syncQuoteFromFedapay(
     return { changed: false, status: quote.status, fedapayStatus };
   }
 
-  // ---- Approved: flip to PAID and create the Payment record (idempotent).
-  await prisma.quote.update({
-    where: { id: quote.id },
+  // ---- Approved: flip to PAID once. If webhook + redirect confirm at the
+  // same time, only the first caller continues to create the payout.
+  const claimed = await prisma.quote.updateMany({
+    where: { id: quote.id, status: { not: 'PAID' } },
     data: { status: 'PAID', paidAt: new Date(), paidViaLink: true },
   });
+  if (claimed.count === 0) {
+    return { changed: false, status: 'PAID', fedapayStatus };
+  }
   console.log(`[syncQuote] Devis ${quote.number} → PAID (tx ${quote.paymentRef})`);
 
   // Payment row: skip if already exists for this quote (quoteId is unique).

@@ -7,6 +7,7 @@ import '../../theme.dart';
 import '../../models/quote.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/quote_service.dart';
+import '../../services/quote_template_service.dart';
 import '../../services/payment_service.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/status_badge.dart';
@@ -69,8 +70,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
     if (_syncingInBackground) return;
     _syncingInBackground = true;
     try {
-      final changed =
-          await PaymentService.checkQuotePayment(widget.quoteId);
+      final changed = await PaymentService.checkQuotePayment(widget.quoteId);
       if (changed && mounted) {
         // Refresh full quote so the side panel + status badge update.
         final q = await QuoteService.getById(widget.quoteId);
@@ -96,8 +96,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
     if (_checkingPayment) return;
     setState(() => _checkingPayment = true);
     try {
-      final changed =
-          await PaymentService.checkQuotePayment(widget.quoteId);
+      final changed = await PaymentService.checkQuotePayment(widget.quoteId);
       if (changed) {
         final q = await QuoteService.getById(widget.quoteId);
         if (mounted) setState(() => _quote = q);
@@ -144,8 +143,18 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
   String _fmtDate(DateTime? d) {
     if (d == null) return '—';
     const months = [
-      'jan.', 'fév.', 'mars', 'avr.', 'mai', 'juin',
-      'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'
+      'jan.',
+      'fév.',
+      'mars',
+      'avr.',
+      'mai',
+      'juin',
+      'juil.',
+      'août',
+      'sept.',
+      'oct.',
+      'nov.',
+      'déc.'
     ];
     return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
   }
@@ -172,14 +181,14 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
       if (!mounted) return;
       // Prefer the user-shareable URL (`/pay/<id>` on the freelancer's domain)
       // when present; fall back to the raw Fedapay checkout URL otherwise.
-      final shareable =
-          res.shareUrl.isNotEmpty ? res.shareUrl : res.paymentUrl;
+      final shareable = res.shareUrl.isNotEmpty ? res.shareUrl : res.paymentUrl;
       _showPaymentLinkSheet(shareable);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Erreur lors de la génération du lien de paiement')),
+              content:
+                  Text('Erreur lors de la génération du lien de paiement')),
         );
       }
     } finally {
@@ -199,7 +208,8 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                     color: context.appBorder,
                     borderRadius: BorderRadius.circular(2))),
@@ -283,7 +293,8 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
                     onPressed: () async {
                       final uri = Uri.parse(url);
                       if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        await launchUrl(uri,
+                            mode: LaunchMode.externalApplication);
                       }
                     },
                     icon: Icon(Icons.open_in_new_rounded, size: 16),
@@ -314,7 +325,8 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
           children: [
             const SizedBox(height: 12),
             Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                     color: context.appBorder,
                     borderRadius: BorderRadius.circular(2))),
@@ -324,8 +336,8 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               child: const Align(
                 alignment: Alignment.centerLeft,
                 child: Text('Changer le statut',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
             const SizedBox(height: 8),
@@ -335,8 +347,11 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               final q = _quote;
               if (q != null) _showSendTemplateSelector(q);
             }),
-            _statusOption(Icons.check_circle_outline_rounded, 'Marquer comme Payé',
-                AppColors.primary, () => _updateStatus('PAID')),
+            _statusOption(
+                Icons.check_circle_outline_rounded,
+                'Marquer comme Payé',
+                AppColors.primary,
+                () => _updateStatus('PAID')),
             _statusOption(Icons.warning_amber_rounded, 'Marquer en retard',
                 AppColors.statusOverdue, () => _updateStatus('OVERDUE')),
             const SizedBox(height: 8),
@@ -350,14 +365,16 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
       IconData icon, String label, Color color, VoidCallback onTap) {
     return ListTile(
       leading: Container(
-        width: 36, height: 36,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, size: 18, color: color),
       ),
-      title: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      title: Text(label,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
       onTap: onTap,
     );
   }
@@ -388,6 +405,51 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _saveAsTemplate(Quote q) async {
+    final ctrl = TextEditingController(text: q.title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Enregistrer comme template'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Nom du template'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (name == null || name.isEmpty) return;
+
+    try {
+      await QuoteTemplateService.createFromQuote(
+        quoteId: q.id,
+        name: name,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Template enregistré')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible de créer le template')),
+        );
+      }
+    }
   }
 
   Future<void> _updateStatus(String status) async {
@@ -515,11 +577,11 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(q.number,
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 Text(q.client?.name ?? '',
-                    style: TextStyle(
-                        fontSize: 11.5, color: context.appTextMuted)),
+                    style:
+                        TextStyle(fontSize: 11.5, color: context.appTextMuted)),
               ],
             ),
           ),
@@ -588,11 +650,11 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(client.name,
-                    style: TextStyle(
-                        fontSize: 13.5, fontWeight: FontWeight.w600)),
+                    style:
+                        TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                 Text('Client',
-                    style: TextStyle(
-                        fontSize: 12, color: context.appTextMuted)),
+                    style:
+                        TextStyle(fontSize: 12, color: context.appTextMuted)),
               ],
             ),
           ),
@@ -615,8 +677,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
           Row(
             children: [
               Text('Prestations (${q.items.length})',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 10),
@@ -640,8 +701,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
                       children: [
                         Text(item.description,
                             style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w500)),
+                                fontSize: 13.5, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 2),
                         Text(
                           '${item.quantity.toInt()} × ${_fmtXOF(item.unitPrice)}',
@@ -663,8 +723,8 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
             children: [
               const Expanded(
                 child: Text('Total',
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               ),
               Text(_fmtXOF(q.total),
                   style: TextStyle(
@@ -688,16 +748,14 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               Icon(Icons.notes_rounded, size: 16, color: context.appTextMuted),
               const SizedBox(width: 6),
               const Text('Notes',
-                  style: TextStyle(
-                      fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  style:
+                      TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 8),
           Text(notes,
               style: TextStyle(
-                  fontSize: 13,
-                  color: context.appTextMuted,
-                  height: 1.5)),
+                  fontSize: 13, color: context.appTextMuted, height: 1.5)),
         ],
       ),
     );
@@ -710,11 +768,12 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.timeline_rounded, size: 16, color: context.appTextMuted),
+              Icon(Icons.timeline_rounded,
+                  size: 16, color: context.appTextMuted),
               const SizedBox(width: 6),
               const Text('Activité',
-                  style: TextStyle(
-                      fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  style:
+                      TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 12),
@@ -816,7 +875,25 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               ),
             ],
           ),
-          if (canUseMomo && q.status != QuoteStatus.paid && !q.isAwaitingPayment) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _saveAsTemplate(q),
+              icon: const Icon(Icons.bookmark_add_outlined, size: 16),
+              label: const Text('Enregistrer comme template'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          if (canUseMomo &&
+              q.status != QuoteStatus.paid &&
+              !q.isAwaitingPayment) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -828,8 +905,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
                         width: 16,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                    : Icon(Icons.account_balance_wallet_outlined,
-                        size: 16),
+                    : Icon(Icons.account_balance_wallet_outlined, size: 16),
                 label: Text(_paymentLoading
                     ? 'Génération...'
                     : 'Générer lien MoMo / Carte'),
@@ -843,7 +919,9 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
               ),
             ),
           ],
-          if (!canUseMomo && q.status != QuoteStatus.paid && !q.isAwaitingPayment) ...[
+          if (!canUseMomo &&
+              q.status != QuoteStatus.paid &&
+              !q.isAwaitingPayment) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -971,7 +1049,10 @@ class _PulsingDotState extends State<_PulsingDot>
   )..repeat();
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -980,7 +1061,8 @@ class _PulsingDotState extends State<_PulsingDot>
       builder: (_, __) {
         final t = _ctrl.value;
         return SizedBox(
-          width: 12, height: 12,
+          width: 12,
+          height: 12,
           child: Stack(alignment: Alignment.center, children: [
             Container(
               width: 12 * (1 + t * 0.6),
@@ -991,7 +1073,8 @@ class _PulsingDotState extends State<_PulsingDot>
               ),
             ),
             Container(
-              width: 8, height: 8,
+              width: 8,
+              height: 8,
               decoration:
                   BoxDecoration(color: widget.color, shape: BoxShape.circle),
             ),
@@ -1017,7 +1100,9 @@ class _TotalPill extends StatelessWidget {
       ),
       child: Text(label,
           style: TextStyle(
-              color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600)),
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -1051,9 +1136,7 @@ class _ActionChip extends StatelessWidget {
             const SizedBox(width: 5),
             Text(label,
                 style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+                    color: color, fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -1093,10 +1176,7 @@ class _TimelineItem extends StatelessWidget {
               child: Icon(icon, size: 14, color: color),
             ),
             if (!isLast)
-              Container(
-                  width: 1,
-                  height: 20,
-                  color: context.appBorder),
+              Container(width: 1, height: 20, color: context.appBorder),
           ],
         ),
         const SizedBox(width: 12),
@@ -1106,12 +1186,12 @@ class _TimelineItem extends StatelessWidget {
             child: Row(
               children: [
                 Text(label,
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500)),
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                 const Spacer(),
                 Text(date,
-                    style: TextStyle(
-                        fontSize: 11.5, color: context.appTextMuted)),
+                    style:
+                        TextStyle(fontSize: 11.5, color: context.appTextMuted)),
               ],
             ),
           ),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import '../../theme.dart';
 import '../../models/quote.dart';
+import '../../models/quote_draft_template.dart';
 import '../../models/client.dart';
 import '../../models/product.dart';
 import '../../providers/quotes_provider.dart';
@@ -11,6 +12,7 @@ import '../../providers/products_provider.dart';
 import '../../providers/credits_provider.dart';
 import '../../services/ai_service.dart';
 import '../../services/quote_service.dart';
+import '../../services/quote_template_service.dart';
 import '../../widgets/template_selector_sheet.dart';
 import '../../widgets/avatar_widget.dart';
 
@@ -19,6 +21,7 @@ class _LineItem {
   final TextEditingController qty;
   final TextEditingController price;
   final TextEditingController unit;
+
   /// Set when the line was created from a catalog product — propagates to
   /// QuoteItem.productId so the usage stats stay accurate.
   String? productId;
@@ -39,6 +42,17 @@ class _LineItem {
       ..price.text = p.price.toStringAsFixed(0)
       ..unit.text = p.unit ?? ''
       ..productId = p.id;
+  }
+
+  factory _LineItem.fromQuoteItem(QuoteItem item) {
+    return _LineItem()
+      ..desc.text = item.description
+      ..qty.text = item.quantity == item.quantity.truncate()
+          ? item.quantity.toInt().toString()
+          : item.quantity.toString()
+      ..price.text = item.unitPrice.toStringAsFixed(0)
+      ..unit.text = item.unit ?? ''
+      ..productId = item.productId;
   }
 
   double get total {
@@ -66,7 +80,9 @@ class _LineItem {
 }
 
 class CreateQuoteScreen extends StatefulWidget {
-  const CreateQuoteScreen({super.key});
+  final QuoteDraftTemplate? initialTemplate;
+
+  const CreateQuoteScreen({super.key, this.initialTemplate});
 
   @override
   State<CreateQuoteScreen> createState() => _CreateQuoteScreenState();
@@ -93,6 +109,13 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   @override
   void initState() {
     super.initState();
+    final template = widget.initialTemplate;
+    if (template != null) {
+      _titleCtrl.text = template.title;
+      _notesCtrl.text = template.notes ?? '';
+      _replaceLines(template.items);
+      QuoteTemplateService.markUsed(template.id).catchError((_) => template);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<ClientsProvider>().loadClients();
@@ -180,8 +203,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
       );
       if (mounted) Navigator.pop(context);
     } on DioException catch (e) {
-      setState(() =>
-          _error = e.response?.data?['message'] ?? 'Erreur lors de la création');
+      setState(() => _error =
+          e.response?.data?['message'] ?? 'Erreur lors de la création');
     } catch (_) {
       setState(() => _error = 'Erreur inattendue');
     } finally {
@@ -275,6 +298,89 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     }
   }
 
+  void _replaceLines(List<QuoteItem> items) {
+    for (final l in _lines) {
+      l.dispose();
+    }
+    _lines
+      ..clear()
+      ..addAll(items.map(_LineItem.fromQuoteItem));
+    if (_lines.isEmpty) _lines.add(_LineItem());
+  }
+
+  Future<void> _openTemplatePicker() async {
+    final picked = await showModalBottomSheet<QuoteDraftTemplate>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => const _QuoteTemplatePickerSheet(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _titleCtrl.text = picked.title;
+      _notesCtrl.text = picked.notes ?? '';
+      _replaceLines(picked.items);
+    });
+    QuoteTemplateService.markUsed(picked.id).catchError((_) => picked);
+  }
+
+  Future<void> _saveCurrentAsTemplate() async {
+    if (_titleCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'Titre du devis requis pour créer un template');
+      return;
+    }
+    final items = _lines
+        .where((l) => l.desc.text.trim().isNotEmpty)
+        .toList()
+        .asMap()
+        .entries
+        .map((e) => e.value.toModel(e.key))
+        .toList();
+    if (items.isEmpty) {
+      setState(() => _error = 'Ajoutez au moins une ligne au template');
+      return;
+    }
+
+    final meta = await showModalBottomSheet<_TemplateMeta>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => _SaveQuoteTemplateSheet(defaultName: _titleCtrl.text),
+    );
+    if (meta == null || !mounted) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await QuoteTemplateService.create(
+        name: meta.name,
+        category: meta.category,
+        description: meta.description,
+        title: _titleCtrl.text.trim(),
+        notes: _notesCtrl.text.trim(),
+        items: items,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Template enregistré')),
+        );
+      }
+    } on DioException catch (e) {
+      setState(() => _error =
+          e.response?.data?['message'] ?? 'Erreur lors de la création');
+    } catch (_) {
+      setState(() => _error = 'Erreur inattendue');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -314,8 +420,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                         contentPadding: EdgeInsets.zero,
                         filled: false,
                       ),
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w500),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -366,8 +472,17 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
           ),
           const Expanded(
             child: Text('Nouveau devis',
-                style:
-                    TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          IconButton(
+            tooltip: 'Depuis template',
+            icon: const Icon(Icons.view_list_rounded, size: 20),
+            onPressed: _openTemplatePicker,
+          ),
+          IconButton(
+            tooltip: 'Enregistrer template',
+            icon: const Icon(Icons.bookmark_add_outlined, size: 20),
+            onPressed: _saveCurrentAsTemplate,
           ),
         ],
       ),
@@ -431,8 +546,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                         ),
                       ),
                     ] else ...[
-                      Icon(Icons.person_outline,
-                          color: context.appTextMuted),
+                      Icon(Icons.person_outline, color: context.appTextMuted),
                       const SizedBox(width: 8),
                       Expanded(
                           child: Text('Sélectionner un client',
@@ -474,8 +588,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text('Choisir un client',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             ),
             Expanded(
               child: clients.isEmpty
@@ -490,8 +603,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                         return ListTile(
                           leading: AvatarWidget(
                               name: c.name, color: c.color, size: 36),
-                          title: Text(c.name,
-                              style: TextStyle(fontSize: 13.5)),
+                          title: Text(c.name, style: TextStyle(fontSize: 13.5)),
                           subtitle: c.city != null ? Text(c.city!) : null,
                           onTap: () {
                             setState(() => _selectedClient = c);
@@ -518,10 +630,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   child: Text('Lignes',
                       style: TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w600))),
-              Text(
-                  '${_lines.length} article${_lines.length > 1 ? 's' : ''}',
-                  style: TextStyle(
-                      fontSize: 11, color: context.appTextMuted)),
+              Text('${_lines.length} article${_lines.length > 1 ? 's' : ''}',
+                  style: TextStyle(fontSize: 11, color: context.appTextMuted)),
             ],
           ),
           ..._lines.asMap().entries.map((entry) {
@@ -686,6 +796,42 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openTemplatePicker,
+                  icon: const Icon(Icons.view_list_rounded, size: 16),
+                  label: const Text('Depuis template'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: context.appTextMuted,
+                    side: BorderSide(color: context.appBorder),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saveCurrentAsTemplate,
+                  icon: const Icon(Icons.bookmark_add_outlined, size: 16),
+                  label: const Text('Sauver template'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           _buildAiTrigger(),
           if (_aiOpen) ...[
             const SizedBox(height: 10),
@@ -731,8 +877,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             ),
             const SizedBox(width: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.18),
                 borderRadius: BorderRadius.circular(20),
@@ -763,9 +908,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// Inline panel: textarea + Generate / Cancel + low-credit upsell.
   Widget _buildAiPanel() {
     final credits = context.watch<CreditsProvider>().aiCredits;
-    final canGenerate = !_aiLoading &&
-        credits >= 1 &&
-        _aiDescCtrl.text.trim().isNotEmpty;
+    final canGenerate =
+        !_aiLoading && credits >= 1 && _aiDescCtrl.text.trim().isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -791,22 +935,20 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             maxLines: 3,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              hintText:
-                  'Ex : Pose de carrelage 20 m², matériaux inclus, '
+              hintText: 'Ex : Pose de carrelage 20 m², matériaux inclus, '
                   'appartement Cotonou…',
-              hintStyle: TextStyle(
-                  fontSize: 12.5, color: context.appTextMuted),
+              hintStyle: TextStyle(fontSize: 12.5, color: context.appTextMuted),
               filled: true,
               fillColor: context.appSurface,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                    color: AppColors.primary.withOpacity(0.3)),
+                borderSide:
+                    BorderSide(color: AppColors.primary.withOpacity(0.3)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                    color: AppColors.primary.withOpacity(0.3)),
+                borderSide:
+                    BorderSide(color: AppColors.primary.withOpacity(0.3)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -823,8 +965,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             const SizedBox(height: 6),
             Text(
               _aiError!,
-              style: TextStyle(
-                  fontSize: 12, color: AppColors.statusOverdue),
+              style: TextStyle(fontSize: 12, color: AppColors.statusOverdue),
             ),
           ],
           const SizedBox(height: 10),
@@ -842,8 +983,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     : const Icon(Icons.auto_awesome_rounded, size: 14),
                 label: Text(_aiLoading ? 'Génération…' : 'Générer'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 9),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   minimumSize: Size.zero,
                   textStyle: const TextStyle(
                       fontSize: 12.5, fontWeight: FontWeight.w700),
@@ -853,13 +994,12 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
               ),
               const SizedBox(width: 8),
               TextButton(
-                onPressed: _aiLoading
-                    ? null
-                    : () => setState(() => _aiOpen = false),
+                onPressed:
+                    _aiLoading ? null : () => setState(() => _aiOpen = false),
                 style: TextButton.styleFrom(
                   foregroundColor: context.appTextMuted,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   minimumSize: Size.zero,
                   textStyle: const TextStyle(fontSize: 12.5),
                 ),
@@ -870,8 +1010,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
           if (credits < 1) ...[
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFFFEF3C7),
                 borderRadius: BorderRadius.circular(8),
@@ -893,8 +1032,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: () =>
-                        Navigator.of(context).pushNamed('/credits'),
+                    onTap: () => Navigator.of(context).pushNamed('/credits'),
                     child: const Text(
                       'Acheter',
                       style: TextStyle(
@@ -929,8 +1067,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                       style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600))),
               Text(_fmtXOF(_total),
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ],
           ),
         ],
@@ -994,10 +1131,311 @@ class _TotalRow extends StatelessWidget {
       children: [
         Expanded(
             child: Text(label,
-                style: TextStyle(
-                    fontSize: 13, color: context.appTextMuted))),
+                style: TextStyle(fontSize: 13, color: context.appTextMuted))),
         Text(value, style: TextStyle(fontSize: 13)),
       ],
+    );
+  }
+}
+
+class _TemplateMeta {
+  final String name;
+  final String? category;
+  final String? description;
+
+  const _TemplateMeta({required this.name, this.category, this.description});
+}
+
+class _SaveQuoteTemplateSheet extends StatefulWidget {
+  final String defaultName;
+
+  const _SaveQuoteTemplateSheet({required this.defaultName});
+
+  @override
+  State<_SaveQuoteTemplateSheet> createState() =>
+      _SaveQuoteTemplateSheetState();
+}
+
+class _SaveQuoteTemplateSheetState extends State<_SaveQuoteTemplateSheet> {
+  late final TextEditingController _nameCtrl =
+      TextEditingController(text: widget.defaultName.trim());
+  final _categoryCtrl = TextEditingController();
+  final _descriptionCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _categoryCtrl.dispose();
+    _descriptionCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom +
+        MediaQuery.of(context).padding.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.appBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.bookmark_add_outlined,
+                    color: AppColors.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Enregistrer comme template',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: context.appText)),
+                    Text('Client, numéro et statut ne seront pas copiés.',
+                        style: TextStyle(
+                            fontSize: 11.5, color: context.appTextMuted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _nameCtrl,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Nom du template'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _categoryCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Catégorie',
+              hintText: 'Web, Marketing, Maintenance...',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _descriptionCtrl,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Description interne',
+              hintText: 'Optionnel',
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () {
+              final name = _nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              Navigator.pop(
+                context,
+                _TemplateMeta(
+                  name: name,
+                  category: _categoryCtrl.text.trim().isEmpty
+                      ? null
+                      : _categoryCtrl.text.trim(),
+                  description: _descriptionCtrl.text.trim().isEmpty
+                      ? null
+                      : _descriptionCtrl.text.trim(),
+                ),
+              );
+            },
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuoteTemplatePickerSheet extends StatefulWidget {
+  const _QuoteTemplatePickerSheet();
+
+  @override
+  State<_QuoteTemplatePickerSheet> createState() =>
+      _QuoteTemplatePickerSheetState();
+}
+
+class _QuoteTemplatePickerSheetState extends State<_QuoteTemplatePickerSheet> {
+  final _searchCtrl = TextEditingController();
+  late Future<List<QuoteDraftTemplate>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = QuoteTemplateService.getAll();
+    _searchCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  String _fmtXOF(double n) {
+    final s = n.toStringAsFixed(0);
+    final buf = StringBuffer();
+    int count = 0;
+    for (int i = s.length - 1; i >= 0; i--) {
+      if (count > 0 && count % 3 == 0) buf.write(' ');
+      buf.write(s[i]);
+      count++;
+    }
+    return '${buf.toString().split('').reversed.join()} F';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.82,
+      maxChildSize: 0.95,
+      minChildSize: 0.45,
+      expand: false,
+      builder: (_, ctrl) => Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.appBorder,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Créer depuis un template',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: context.appText)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    hintText: 'Rechercher un template...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<QuoteDraftTemplate>>(
+              future: _future,
+              builder: (_, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  );
+                }
+                final all = snap.data ?? [];
+                final q = _searchCtrl.text.trim().toLowerCase();
+                final filtered = q.isEmpty
+                    ? all
+                    : all
+                        .where((t) =>
+                            t.name.toLowerCase().contains(q) ||
+                            t.title.toLowerCase().contains(q) ||
+                            (t.category ?? '').toLowerCase().contains(q) ||
+                            (t.description ?? '').toLowerCase().contains(q))
+                        .toList();
+
+                if (all.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Aucun template pour le moment. Sauvegardez un devis type pour le réutiliser ici.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: context.appTextMuted),
+                      ),
+                    ),
+                  );
+                }
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Text('Aucun résultat',
+                        style: TextStyle(color: context.appTextMuted)),
+                  );
+                }
+
+                return ListView.separated(
+                  controller: ctrl,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final template = filtered[i];
+                    return ListTile(
+                      onTap: () => Navigator.pop(context, template),
+                      tileColor: context.appSurface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: context.appBorder),
+                      ),
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.receipt_long_rounded,
+                            color: AppColors.primary),
+                      ),
+                      title: Text(template.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 13.5, fontWeight: FontWeight.w700)),
+                      subtitle: Text(
+                        '${template.category ?? 'Sans catégorie'} · ${template.items.length} ligne${template.items.length > 1 ? 's' : ''} · ${template.usageCount} utilisation${template.usageCount > 1 ? 's' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Text(_fmtXOF(template.total),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary)),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1069,7 +1507,8 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
               Center(
                 child: Container(
                   margin: const EdgeInsets.only(top: 8, bottom: 4),
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: context.appBorder,
                     borderRadius: BorderRadius.circular(2),
@@ -1096,8 +1535,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                       decoration: InputDecoration(
                         prefixIcon: Icon(Icons.search_rounded,
                             size: 18, color: context.appTextMuted),
-                        hintText:
-                            'Rechercher (nom, description, catégorie)…',
+                        hintText: 'Rechercher (nom, description, catégorie)…',
                         hintStyle: TextStyle(
                             fontSize: 13, color: context.appTextSubtle),
                         isDense: true,
@@ -1126,8 +1564,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                                     ? 'Aucun produit dans le catalogue'
                                     : 'Aucun résultat pour « $q »',
                                 style: TextStyle(
-                                    fontSize: 13,
-                                    color: context.appTextMuted),
+                                    fontSize: 13, color: context.appTextMuted),
                               ),
                             ],
                           ),
@@ -1145,8 +1582,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
                 decoration: BoxDecoration(
                   color: context.appSurface,
-                  border:
-                      Border(top: BorderSide(color: context.appBorder)),
+                  border: Border(top: BorderSide(color: context.appBorder)),
                 ),
                 child: Row(
                   children: [
@@ -1182,8 +1618,8 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
     return count;
   }
 
-  Widget _buildSlot(int index, List<String> categories,
-      Map<String, List<Product>> grouped) {
+  Widget _buildSlot(
+      int index, List<String> categories, Map<String, List<Product>> grouped) {
     int cursor = 0;
     for (final cat in categories) {
       if (index == cursor) {
@@ -1252,7 +1688,8 @@ class _ProductRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 32, height: 32,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(8),

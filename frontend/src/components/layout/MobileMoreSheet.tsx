@@ -156,6 +156,12 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
             onClick={() => go('/products')}
           />
           <MoreItem
+            label="Templates"
+            hint="Bases de devis réutilisables"
+            icon={<ReceiptIcon size={18} />}
+            onClick={() => go('/templates')}
+          />
+          <MoreItem
             label="Mes reversements"
             hint="Argent reçu via MoMo"
             icon={<WalletIcon size={18} />}

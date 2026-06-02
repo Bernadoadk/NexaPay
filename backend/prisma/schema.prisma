@@ -35,10 +35,13 @@ model User {
 
   clients            Client[]
   quotes             Quote[]
+  quoteTemplates     QuoteTemplate[]
   products           Product[]
   payments           Payment[]
   otpCodes           OtpCode[]
   creditTransactions CreditTransaction[]
+  planPayments       PlanPayment[]
+  creditPayments     CreditPayment[]
 }
 
 model CreditTransaction {
@@ -49,7 +52,40 @@ model CreditTransaction {
   type        String   // "signup_bonus" | "plan_renewal" | "purchase" | "ai_use"
   description String
   balanceAfter Int
+  fedapayTxId String?  @unique
   createdAt   DateTime @default(now())
+}
+
+model PlanPayment {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fedapayTxId String    @unique
+  plan        Plan
+  interval    String    @default("monthly")
+  amount      Int
+  status      String    @default("PENDING")
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status])
+}
+
+model CreditPayment {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fedapayTxId String    @unique
+  packId      String
+  credits     Int
+  amount      Int
+  status      String    @default("PENDING")
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status])
 }
 
 model OtpCode {
@@ -125,6 +161,45 @@ model QuoteItem {
   product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([productId])
+}
+
+model QuoteTemplate {
+  id          String              @id @default(cuid())
+  name        String
+  category    String?
+  description String?
+  title       String
+  notes       String?
+  taxRate     Float               @default(18)
+  discount    Float               @default(0)
+  subtotal    Float               @default(0)
+  taxAmount   Float               @default(0)
+  total       Float               @default(0)
+  validDays   Int                 @default(30)
+  usageCount  Int                 @default(0)
+  lastUsedAt  DateTime?
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       QuoteTemplateItem[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+model QuoteTemplateItem {
+  id              String        @id @default(cuid())
+  description     String
+  quantity        Float         @default(1)
+  unitPrice       Float         @default(0)
+  total           Float         @default(0)
+  unit            String?
+  order           Int           @default(0)
+  productId       String?
+  quoteTemplateId String
+  quoteTemplate   QuoteTemplate @relation(fields: [quoteTemplateId], references: [id], onDelete: Cascade)
+
+  @@index([quoteTemplateId])
 }
 
 model Product {

@@ -7,6 +7,7 @@ import 'quotes/quotes_screen.dart';
 import 'quotes/create_quote_screen.dart';
 import 'clients/clients_screen.dart';
 import 'settings/settings_screen.dart';
+import 'templates/templates_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -23,7 +24,60 @@ class _MainScreenState extends State<MainScreen> {
       Navigator.push(context, fadeSlideRoute(const CreateQuoteScreen()));
       return;
     }
+    if (navIndex == 4) {
+      _showMoreSheet();
+      return;
+    }
     setState(() => _currentIndex = navIndex > 2 ? navIndex - 1 : navIndex);
+  }
+
+  void _showMoreSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.appBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _MoreItem(
+                icon: Icons.receipt_long_outlined,
+                label: 'Templates',
+                hint: 'Bases de devis réutilisables',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    fadeSlideRoute(const TemplatesScreen()),
+                  );
+                },
+              ),
+              _MoreItem(
+                icon: Icons.settings_outlined,
+                label: 'Réglages',
+                hint: 'Profil, logo, MoMo, IFU',
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _currentIndex = 3);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -86,9 +140,9 @@ class _MainScreenState extends State<MainScreen> {
                     current: _currentIndex,
                     onTap: _onNavTap),
                 _NavItem(
-                    icon: Icons.settings_outlined,
-                    activeIcon: Icons.settings_rounded,
-                    label: 'Réglages',
+                    icon: Icons.more_horiz_rounded,
+                    activeIcon: Icons.more_horiz_rounded,
+                    label: 'Plus',
                     navIndex: 4,
                     current: _currentIndex,
                     onTap: _onNavTap),
@@ -118,8 +172,7 @@ class _NavItem extends StatelessWidget {
     required this.onTap,
   });
 
-  bool get _active =>
-      current == (navIndex > 2 ? navIndex - 1 : navIndex);
+  bool get _active => current == (navIndex > 2 ? navIndex - 1 : navIndex);
 
   @override
   Widget build(BuildContext context) {
@@ -141,14 +194,48 @@ class _NavItem extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 10.5,
-                fontWeight:
-                    active ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                 color: active ? AppColors.primary : context.appTextMuted,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MoreItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String hint;
+  final VoidCallback onTap;
+
+  const _MoreItem({
+    required this.icon,
+    required this.label,
+    required this.hint,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: context.appBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.appBorder),
+        ),
+        child: Icon(icon, color: AppColors.primary, size: 20),
+      ),
+      title: Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      subtitle: Text(hint),
+      trailing: Icon(Icons.chevron_right_rounded, color: context.appTextMuted),
     );
   }
 }
@@ -180,8 +267,7 @@ class _FabNavItem extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(Icons.add_rounded,
-                  color: Colors.white, size: 26),
+              child: Icon(Icons.add_rounded, color: Colors.white, size: 26),
             ),
           ),
         ),

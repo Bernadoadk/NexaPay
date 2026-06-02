@@ -21,6 +21,8 @@ export const CREDIT_PACKS = [
   { id: 'pack_100', credits: 100, price: 9000, label: '100 crédits' },
 ];
 
+type CreditPack = typeof CREDIT_PACKS[number];
+
 function getTx(data: any) {
   return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
 }
@@ -40,6 +42,86 @@ async function getApprovedFedapayTransaction(transactionId: string | number) {
     throw Object.assign(new Error(`Paiement non confirmé (statut: ${tx?.status || 'inconnu'})`), { status: 402 });
   }
   return tx;
+}
+
+async function createFedapayPaymentLink(transactionId: string | number): Promise<string> {
+  const tokenData: any = await fedapayReq('POST', `/transactions/${transactionId}/token`);
+  const paymentUrl = tokenData?.url ?? tokenData?.payment_url;
+  if (!paymentUrl) {
+    throw new Error('Lien de paiement FedaPay manquant');
+  }
+  return String(paymentUrl);
+}
+
+function assertCreditTransactionMatches(tx: any, pack: CreditPack, expectedEmail?: string) {
+  const expectedDescription = `NexaPay Crédits IA — ${pack.label}`;
+  const matchesPayment =
+    String(tx?.description ?? '') === expectedDescription &&
+    getTxAmount(tx) === pack.price;
+
+  if (!matchesPayment) {
+    throw Object.assign(new Error('Transaction FedaPay incohérente avec la demande'), { status: 400 });
+  }
+
+  if (expectedEmail && getCustomerEmail(tx) !== expectedEmail.toLowerCase()) {
+    throw Object.assign(new Error('Transaction FedaPay liée à un autre compte'), { status: 403 });
+  }
+}
+
+export async function activateCreditPurchase(userId: string, pack: CreditPack, txRef: string) {
+  const existing = await prisma.creditTransaction.findFirst({
+    where: {
+      type: 'purchase',
+      OR: [
+        { fedapayTxId: txRef },
+        { description: { contains: `tx ${txRef}` } },
+      ],
+    } as any,
+  });
+
+  if (existing) {
+    if (existing.userId !== userId) {
+      throw Object.assign(new Error('Transaction FedaPay déjà utilisée par un autre compte'), { status: 403 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { aiCredits: true },
+    });
+    await prisma.creditPayment.updateMany({
+      where: { fedapayTxId: txRef, userId },
+      data: { status: 'APPROVED', confirmedAt: new Date() },
+    });
+    return { aiCredits: user?.aiCredits ?? 0, added: 0, alreadyCredited: true };
+  }
+
+  const updated = await prisma.$transaction(async (txClient) => {
+    const updatedUser = await txClient.user.update({
+      where: { id: userId },
+      data: { aiCredits: { increment: pack.credits } },
+      select: { aiCredits: true },
+    });
+
+    await txClient.creditTransaction.create({
+      data: {
+        userId,
+        amount: pack.credits,
+        type: 'purchase',
+        description: `Achat pack ${pack.label} — tx ${txRef}`,
+        balanceAfter: updatedUser.aiCredits,
+        fedapayTxId: txRef,
+      } as any,
+    });
+
+    await txClient.creditPayment.updateMany({
+      where: { fedapayTxId: txRef, userId },
+      data: { status: 'APPROVED', confirmedAt: new Date() },
+    });
+
+    return updatedUser;
+  });
+
+  return { aiCredits: updated.aiCredits, added: pack.credits, alreadyCredited: false };
 }
 
 async function fedapayReq(method: string, path: string, body?: object) {
@@ -147,7 +229,14 @@ router.post('/confirm-purchase', authenticate, async (req: AuthRequest, res): Pr
 
     // Idempotency: if a transaction with this Fedapay ID was already credited, return current balance.
     const existing = await prisma.creditTransaction.findFirst({
-      where: { userId: req.userId!, type: 'purchase', description: { contains: `tx ${txRef}` } },
+      where: {
+        userId: req.userId!,
+        type: 'purchase',
+        OR: [
+          { fedapayTxId: txRef },
+          { description: { contains: `tx ${txRef}` } },
+        ],
+      } as any,
     });
     if (existing) {
       const user = await prisma.user.findUnique({
@@ -158,42 +247,53 @@ router.post('/confirm-purchase', authenticate, async (req: AuthRequest, res): Pr
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId! },
-      select: { email: true },
-    });
+    const user = await prisma.user.findUnique({ where: { id: req.userId! } });
     if (!user) { res.status(404).json({ message: 'Utilisateur introuvable' }); return; }
 
     const tx = await getApprovedFedapayTransaction(txRef);
-    const expectedDescription = `NexaPay Crédits IA — ${pack.label}`;
-    if (
-      String(tx?.description ?? '') !== expectedDescription ||
-      getTxAmount(tx) !== pack.price ||
-      getCustomerEmail(tx) !== user.email.toLowerCase()
-    ) {
-      res.status(400).json({ message: 'Transaction FedaPay incohérente avec la demande' });
-      return;
+
+    const creditPayment = await prisma.creditPayment.findUnique({ where: { fedapayTxId: txRef } });
+    if (creditPayment) {
+      if (creditPayment.userId !== user.id) {
+        res.status(403).json({ message: 'Transaction FedaPay liée à un autre compte' });
+        return;
+      }
+      if (creditPayment.packId !== pack.id || creditPayment.credits !== pack.credits || creditPayment.amount !== pack.price) {
+        res.status(400).json({ message: 'Transaction FedaPay incohérente avec la demande' });
+        return;
+      }
+      assertCreditTransactionMatches(tx, pack);
+    } else {
+      // Backward compatibility for transactions created before CreditPayment existed.
+      assertCreditTransactionMatches(tx, pack, user.email);
     }
 
-    const updated = await prisma.user.update({
-      where: { id: req.userId! },
-      data: { aiCredits: { increment: pack.credits } },
-      select: { aiCredits: true },
-    });
-
-    await prisma.creditTransaction.create({
-      data: {
-        userId: req.userId!,
-        amount: pack.credits,
-        type: 'purchase',
-        description: `Achat pack ${pack.label} — tx ${txRef}`,
-        balanceAfter: updated.aiCredits,
-      },
-    });
+    const result = await activateCreditPurchase(user.id, pack, txRef);
 
     console.log(`[ConfirmPurchase] +${pack.credits} crédits pour user ${req.userId} (tx ${txRef})`);
-    res.json({ success: true, aiCredits: updated.aiCredits, added: pack.credits });
+    res.json({
+      success: true,
+      aiCredits: result.aiCredits,
+      added: result.added,
+      alreadyCredited: result.alreadyCredited,
+    });
   } catch (err: any) {
+    if (err?.code === 'P2002') {
+      const transaction = await prisma.creditTransaction.findFirst({
+        where: { fedapayTxId: String(transactionId) },
+        select: { userId: true },
+      });
+      if (transaction && transaction.userId !== req.userId) {
+        res.status(403).json({ message: 'Transaction FedaPay déjà utilisée par un autre compte' });
+        return;
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: req.userId! },
+        select: { aiCredits: true },
+      });
+      res.json({ alreadyCredited: true, aiCredits: user?.aiCredits ?? 0, added: 0 });
+      return;
+    }
     console.error('[ConfirmPurchase] Erreur:', err.message);
     res.status(err.status || 500).json({ message: `Erreur confirmation : ${err.message}` });
   }
@@ -234,11 +334,26 @@ router.post('/purchase', authenticate, async (req: AuthRequest, res): Promise<vo
 
     const tx = getTx(txData);
     const transId = tx?.id;
-    const checkoutBase = process.env.FEDAPAY_ENV === 'live'
-      ? 'https://checkout.fedapay.com/v1/checkout'
-      : 'https://sandbox-checkout.fedapay.com/v1/checkout';
-    const paymentUrl: string = tx?.payment_url
-      || (tx?.token ? `${checkoutBase}?token=${tx.token}` : '');
+    if (!transId) throw new Error('Transaction ID manquant dans la réponse Fedapay');
+    await prisma.creditPayment.upsert({
+      where: { fedapayTxId: String(transId) },
+      update: {
+        userId: user.id,
+        packId: pack.id,
+        credits: pack.credits,
+        amount: pack.price,
+        status: 'PENDING',
+        confirmedAt: null,
+      },
+      create: {
+        userId: user.id,
+        fedapayTxId: String(transId),
+        packId: pack.id,
+        credits: pack.credits,
+        amount: pack.price,
+      },
+    });
+    const paymentUrl = await createFedapayPaymentLink(transId);
 
     res.json({ paymentUrl, transactionId: transId, pack });
   } catch (err: any) {

@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { Webhook } from 'fedapay';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
-import { PLAN_CREDITS, PLAN_CREDIT_CAP } from './credits';
+import { activateCreditPurchase, CREDIT_PACKS, PLAN_CREDITS, PLAN_CREDIT_CAP } from './credits';
 import { syncQuoteFromFedapay } from '../lib/quoteSync';
 
 const router = Router();
@@ -57,6 +57,15 @@ async function getApprovedFedapayTransaction(transactionId: string | number) {
   return tx;
 }
 
+async function createFedapayPaymentLink(transactionId: string | number): Promise<string> {
+  const tokenData: any = await fedapayReq('POST', `/transactions/${transactionId}/token`);
+  const paymentUrl = tokenData?.url ?? tokenData?.payment_url;
+  if (!paymentUrl) {
+    throw new Error('Lien de paiement FedaPay manquant');
+  }
+  return String(paymentUrl);
+}
+
 function assertTransactionMatches(
   tx: any,
   expected: { description: string; amount: number; email?: string },
@@ -71,6 +80,86 @@ function assertTransactionMatches(
   if (expected.email && txEmail !== expected.email.toLowerCase()) {
     throw Object.assign(new Error('Transaction FedaPay liée à un autre compte'), { status: 403 });
   }
+}
+
+async function activatePlanUpgrade(
+  userId: string,
+  plan: 'PRO' | 'BUSINESS',
+  interval: 'monthly' | 'annual',
+  txRef: string,
+) {
+  const months = interval === 'annual' ? 12 : 1;
+  const planExpiresAt = new Date();
+  planExpiresAt.setMonth(planExpiresAt.getMonth() + months);
+
+  const monthlyCredits = PLAN_CREDITS[plan] ?? 0;
+  const creditCap = PLAN_CREDIT_CAP[plan] ?? monthlyCredits;
+
+  const already = await prisma.creditTransaction.findFirst({
+    where: {
+      type: 'plan_renewal',
+      OR: [
+        { fedapayTxId: txRef },
+        { description: { contains: `tx ${txRef}` } },
+      ],
+    } as any,
+  });
+
+  if (already) {
+    if (already.userId !== userId) {
+      throw Object.assign(new Error('Transaction FedaPay déjà utilisée par un autre compte'), { status: 403 });
+    }
+
+    const refreshed = await prisma.user.update({
+      where: { id: userId },
+      data: { plan, planExpiresAt, planInterval: interval },
+    });
+    await prisma.planPayment.updateMany({
+      where: { fedapayTxId: txRef, userId },
+      data: { status: 'APPROVED', confirmedAt: new Date() },
+    });
+    return { user: refreshed, alreadyCredited: true };
+  }
+
+  return prisma.$transaction(async (txClient) => {
+    const user = await txClient.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw Object.assign(new Error('Utilisateur introuvable'), { status: 404 });
+    }
+
+    const currentCredits = user.aiCredits ?? 0;
+    const newCredits = Math.min(currentCredits + monthlyCredits, creditCap);
+    const added = newCredits - currentCredits;
+
+    const updatedUser = await txClient.user.update({
+      where: { id: userId },
+      data: {
+        plan,
+        planExpiresAt,
+        planInterval: interval,
+        aiCredits: newCredits,
+        aiCreditsLastRenewedAt: new Date(),
+      },
+    });
+
+    await txClient.creditTransaction.create({
+      data: {
+        userId,
+        amount: added,
+        type: 'plan_renewal',
+        description: `Activation plan ${plan} (${months} mois) — tx ${txRef}`,
+        balanceAfter: newCredits,
+        fedapayTxId: txRef,
+      } as any,
+    });
+
+    await txClient.planPayment.updateMany({
+      where: { fedapayTxId: txRef, userId },
+      data: { status: 'APPROVED', confirmedAt: new Date() },
+    });
+
+    return { user: updatedUser, alreadyCredited: false };
+  });
 }
 
 function verifyFedapayWebhook(req: any) {
@@ -173,11 +262,7 @@ router.post('/initiate/:quoteId', authenticate, async (req: AuthRequest, res): P
     const transId = tx?.id;
     if (!transId) throw new Error('Transaction ID manquant dans la réponse Fedapay');
 
-    const checkoutBase = process.env.FEDAPAY_ENV === 'live'
-      ? 'https://checkout.fedapay.com/v1/checkout'
-      : 'https://sandbox-checkout.fedapay.com/v1/checkout';
-    const paymentUrl: string = tx?.payment_url
-      || (tx?.token ? `${checkoutBase}?token=${tx.token}` : '');
+    const paymentUrl = await createFedapayPaymentLink(transId);
 
     await prisma.quote.update({
       where: { id: quote.id },
@@ -272,7 +357,7 @@ router.post('/webhook', webhookLimiter, async (req, res): Promise<void> => {
 
         // Case 2: plan upgrade
         const planMatch = txDescription.match(/Abonnement NexaPay (PRO|BUSINESS) — (\d+) mois/);
-        if (planMatch && txCustomerEmail) {
+        if (planMatch) {
           const plan = planMatch[1] as 'PRO' | 'BUSINESS';
           const months = parseInt(planMatch[2], 10) || 1;
           const interval = months >= 12 ? 'annual' : 'monthly';
@@ -280,81 +365,46 @@ router.post('/webhook', webhookLimiter, async (req, res): Promise<void> => {
           assertTransactionMatches(tx, { description: expected.description, amount: expected.amount });
           const txRef = String(transId);
 
-          const planExpiresAt = new Date();
-          planExpiresAt.setMonth(planExpiresAt.getMonth() + months);
-
-          const monthlyCredits = PLAN_CREDITS[plan] ?? 0;
-          const creditCap = PLAN_CREDIT_CAP[plan] ?? monthlyCredits;
-
-          const targetUser = await prisma.user.findUnique({ where: { email: txCustomerEmail } });
+          const planPayment = await prisma.planPayment.findUnique({
+            where: { fedapayTxId: txRef },
+            include: { user: true },
+          });
+          const targetUser = planPayment?.user ?? await prisma.user.findUnique({ where: { email: txCustomerEmail } });
           if (targetUser) {
-            // Idempotency: skip credit-adding if confirm-upgrade already credited this tx.
-            const already = await prisma.creditTransaction.findFirst({
-                where: { userId: targetUser.id, type: 'plan_renewal', description: { contains: `tx ${txRef}` } },
-            });
-
-            if (already) {
-              // Plan info may still need refreshing (e.g. expiry date) but credits stay.
-              await prisma.user.update({
-                where: { email: txCustomerEmail },
-                data: { plan, planExpiresAt, planInterval: interval },
-              });
-              console.log(`[Webhook] tx ${txRef} déjà créditée — plan rafraîchi uniquement`);
+            if (planPayment && (planPayment.plan !== plan || planPayment.interval !== interval || planPayment.amount !== expected.amount)) {
+              console.warn(`[Webhook] PlanPayment incohérent pour tx ${txRef}`);
             } else {
-              const currentCredits = targetUser.aiCredits ?? 0;
-              const newCredits = Math.min(currentCredits + monthlyCredits, creditCap);
-              const added = newCredits - currentCredits;
-
-              await prisma.user.update({
-                where: { email: txCustomerEmail },
-                data: { plan, planExpiresAt, planInterval: interval, aiCredits: newCredits, aiCreditsLastRenewedAt: new Date() },
-              });
-
-              if (added > 0) {
-                await prisma.creditTransaction.create({
-                  data: {
-                    userId: targetUser.id,
-                    amount: added,
-                    type: 'plan_renewal',
-                    description: `Activation plan ${plan} (${months} mois) — tx ${txRef}`,
-                    balanceAfter: newCredits,
-                  },
-                });
-              }
-              console.log(`[Webhook] Plan ${plan} (${months} mois) activé pour ${txCustomerEmail} (tx ${txRef})`);
+              await activatePlanUpgrade(targetUser.id, plan, interval, txRef);
+              console.log(`[Webhook] Plan ${plan} (${months} mois) activé pour ${targetUser.email} (tx ${txRef})`);
             }
           }
         }
 
         // Case 3: credit pack purchase
         const creditPackMatch = txDescription.match(/NexaPay Crédits IA — (\d+) crédits/);
-        if (creditPackMatch && txCustomerEmail) {
+        if (creditPackMatch) {
           const credits = parseInt(creditPackMatch[1], 10);
           const txRef = String(transId);
-          const targetUser = await prisma.user.findUnique({ where: { email: txCustomerEmail } });
-          if (targetUser) {
-            // Idempotency: skip if confirm-purchase already credited this tx.
-            const already = await prisma.creditTransaction.findFirst({
-              where: { userId: targetUser.id, type: 'purchase', description: { contains: `tx ${txRef}` } },
-            });
-            if (!already) {
-              const newBalance = targetUser.aiCredits + credits;
-              await prisma.user.update({
-                where: { email: txCustomerEmail },
-                data: { aiCredits: newBalance },
-              });
-              await prisma.creditTransaction.create({
-                data: {
-                  userId: targetUser.id,
-                  amount: credits,
-                  type: 'purchase',
-                  description: `Achat pack ${credits} crédits — tx ${txRef}`,
-                  balanceAfter: newBalance,
-                },
-              });
-              console.log(`[Webhook] ${credits} crédits IA ajoutés pour ${txCustomerEmail} (tx ${txRef})`);
+          const pack = CREDIT_PACKS.find(p => p.credits === credits);
+          const creditPayment = await prisma.creditPayment.findUnique({
+            where: { fedapayTxId: txRef },
+            include: { user: true },
+          });
+          const targetUser = creditPayment?.user
+            ?? (txCustomerEmail ? await prisma.user.findUnique({ where: { email: txCustomerEmail } }) : null);
+
+          if (pack && targetUser) {
+            const expectedDescription = `NexaPay Crédits IA — ${pack.label}`;
+            if (String(tx?.description ?? '') !== expectedDescription || getTxAmount(tx) !== pack.price) {
+              console.warn(`[Webhook] CreditPayment incohérent pour tx ${txRef}`);
+            } else if (
+              creditPayment &&
+              (creditPayment.packId !== pack.id || creditPayment.credits !== pack.credits || creditPayment.amount !== pack.price)
+            ) {
+              console.warn(`[Webhook] CreditPayment local incohérent pour tx ${txRef}`);
             } else {
-              console.log(`[Webhook] tx ${txRef} déjà créditée — webhook ignoré`);
+              await activateCreditPurchase(targetUser.id, pack, txRef);
+              console.log(`[Webhook] ${credits} crédits IA ajoutés pour ${targetUser.email} (tx ${txRef})`);
             }
           }
         }
@@ -387,62 +437,37 @@ router.post('/confirm-upgrade', authenticate, async (req: AuthRequest, res): Pro
   }
 
   try {
-    const months = interval === 'annual' ? 12 : 1;
-    const planExpiresAt = new Date();
-    planExpiresAt.setMonth(planExpiresAt.getMonth() + months);
-
-    const monthlyCredits = PLAN_CREDITS[plan] ?? 0;
-    const creditCap = PLAN_CREDIT_CAP[plan] ?? monthlyCredits;
-
     const user = await prisma.user.findUnique({ where: { id: req.userId! } });
     if (!user) { res.status(404).json({ message: 'Utilisateur introuvable' }); return; }
 
     const txRef = String(transactionId);
     const tx = await getApprovedFedapayTransaction(txRef);
     const expected = expectedPlanPayment(plan, interval);
-    assertTransactionMatches(tx, {
-      description: expected.description,
-      amount: expected.amount,
-      email: user.email,
-    });
 
-    // Idempotency: if webhook already credited this tx, just return current state.
-    const already = await prisma.creditTransaction.findFirst({
-      where: { userId: user.id, type: 'plan_renewal', description: { contains: `tx ${txRef}` } },
-    });
-    if (already) {
-      const refreshed = await prisma.user.update({
-        where: { id: req.userId! },
-        data: { plan, planExpiresAt, planInterval: interval },
-      });
-      console.log(`[ConfirmUpgrade] tx ${txRef} déjà créditée pour ${user.email}`);
-      res.json({ success: true, user: refreshed, alreadyCredited: true });
-      return;
-    }
-
-    const currentCredits = user.aiCredits ?? 0;
-    const newCredits = Math.min(currentCredits + monthlyCredits, creditCap);
-    const added = newCredits - currentCredits;
-
-    const updatedUser = await prisma.user.update({
-      where: { id: req.userId! },
-      data: { plan, planExpiresAt, planInterval: interval, aiCredits: newCredits, aiCreditsLastRenewedAt: new Date() },
-    });
-
-    if (added > 0) {
-      await prisma.creditTransaction.create({
-        data: {
-          userId: user.id,
-          amount: added,
-          type: 'plan_renewal',
-          description: `Activation plan ${plan} (${months} mois) — tx ${txRef}`,
-          balanceAfter: newCredits,
-        },
+    const planPayment = await prisma.planPayment.findUnique({ where: { fedapayTxId: txRef } });
+    if (planPayment) {
+      if (planPayment.userId !== user.id) {
+        res.status(403).json({ message: 'Transaction FedaPay liée à un autre compte' });
+        return;
+      }
+      if (planPayment.plan !== plan || planPayment.interval !== interval || planPayment.amount !== expected.amount) {
+        res.status(400).json({ message: 'Transaction FedaPay incohérente avec la demande' });
+        return;
+      }
+      assertTransactionMatches(tx, { description: expected.description, amount: expected.amount });
+    } else {
+      // Backward compatibility for transactions created before PlanPayment existed.
+      assertTransactionMatches(tx, {
+        description: expected.description,
+        amount: expected.amount,
+        email: user.email,
       });
     }
+
+    const result = await activatePlanUpgrade(user.id, plan, interval, txRef);
 
     console.log(`[ConfirmUpgrade] Plan ${plan} activé pour ${user.email} (tx ${txRef})`);
-    res.json({ success: true, user: updatedUser });
+    res.json({ success: true, user: result.user, alreadyCredited: result.alreadyCredited });
   } catch (err: any) {
     console.error('[ConfirmUpgrade] Erreur:', err.message);
     res.status(err.status || 500).json({ message: `Erreur confirmation : ${err.message}` });
@@ -485,11 +510,26 @@ router.post('/upgrade', authenticate, async (req: AuthRequest, res): Promise<voi
 
     const tx2 = getTx(txData);
     const transId = tx2?.id;
-    const checkoutBase2 = process.env.FEDAPAY_ENV === 'live'
-      ? 'https://checkout.fedapay.com/v1/checkout'
-      : 'https://sandbox-checkout.fedapay.com/v1/checkout';
-    const paymentUrl: string = tx2?.payment_url
-      || (tx2?.token ? `${checkoutBase2}?token=${tx2.token}` : '');
+    if (!transId) throw new Error('Transaction ID manquant dans la réponse Fedapay');
+    await prisma.planPayment.upsert({
+      where: { fedapayTxId: String(transId) },
+      update: {
+        userId: user.id,
+        plan,
+        interval,
+        amount,
+        status: 'PENDING',
+        confirmedAt: null,
+      },
+      create: {
+        userId: user.id,
+        fedapayTxId: String(transId),
+        plan,
+        interval,
+        amount,
+      },
+    });
+    const paymentUrl = await createFedapayPaymentLink(transId);
 
     res.json({ paymentUrl, transactionId: transId, plan, interval, amount });
   } catch (err: any) {
@@ -554,20 +594,33 @@ router.post('/:paymentId/retry', authenticate, async (req: AuthRequest, res): Pr
       data: { status: 'TRANSFERRING', failReason: null },
     });
 
-    const txData: any = await fedapayReq('POST', '/transfers', {
+    const cleanPhone = payment.user.phone.replace(/\s/g, '');
+    const payoutData: any = await fedapayReq('POST', '/payouts', {
       amount: payment.netAmount,
       description: `Reversement devis ${payment.quote?.number ?? ''} (retry)`,
+      mode: 'mtn_open',
       currency: { iso: 'XOF' },
-      phone_number: {
-        number: payment.user.phone.replace(/\s/g, ''),
-        country: payment.user.phoneCountry || 'bj',
+      customer: {
+        firstname: 'NexaPay',
+        lastname: 'Merchant',
+        email: `payout-${cleanPhone.replace(/\D/g, '')}@nexapay.app`,
+        phone_number: {
+          number: cleanPhone,
+          country: payment.user.phoneCountry || 'bj',
+        },
       },
     });
-    const transfer = txData?.['v1/transfer'] ?? txData?.v1?.transfer ?? txData;
-    const transferId = transfer?.id;
-    if (!transferId) throw new Error('Transfer ID manquant');
+    const payout = payoutData?.['v1/payout'] ?? payoutData?.v1?.payout ?? payoutData;
+    const transferId = payout?.id;
+    if (!transferId) throw new Error('Payout ID manquant');
 
-    await fedapayReq('PUT', `/transfers/${transferId}/send`, {});
+    await fedapayReq('PUT', '/payouts/start', [{
+      id: transferId,
+      phone_number: {
+        number: cleanPhone,
+        country: payment.user.phoneCountry || 'bj',
+      },
+    }]);
 
     const updated = await prisma.payment.update({
       where: { id: payment.id },
