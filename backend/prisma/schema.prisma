@@ -37,6 +37,9 @@ model User {
   quotes             Quote[]
   quoteTemplates     QuoteTemplate[]
   products           Product[]
+  stores             Store[]
+  storeOrders        StoreOrder[]
+  storePayments      StorePayment[]
   payments           Payment[]
   otpCodes           OtpCode[]
   creditTransactions CreditTransaction[]
@@ -141,6 +144,7 @@ model Quote {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   items       QuoteItem[]
   payment     Payment?
+  storeOrder  StoreOrder?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -161,6 +165,160 @@ model QuoteItem {
   product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([productId])
+}
+
+model Store {
+  id                  String         @id @default(cuid())
+  name                String
+  slug                String         @unique
+  description         String?
+  logoUrl             String?
+  coverImageUrl       String?
+  themePrimaryColor   String         @default("#0F8F65")
+  themeAccentColor    String         @default("#14201C")
+  themeBackgroundColor String        @default("#FAFAF7")
+  themeSurfaceColor   String         @default("#FFFFFF")
+  themeTextColor      String         @default("#14201C")
+  themeMutedTextColor String         @default("#6B7570")
+  themeBorderColor    String         @default("#E2E4DF")
+  themeButtonTextColor String        @default("#FFFFFF")
+  themeInputBackgroundColor String   @default("#FFFFFF")
+  themeInputTextColor String         @default("#14201C")
+  themeInputBorderColor String       @default("#C8CCC6")
+  themeFontFamily     String         @default("Inter")
+  whatsapp            String?
+  phone               String?
+  phoneCountry        String?        @default("bj")
+  email               String?
+  momoPhone           String?
+  momoCountry         String?        @default("bj")
+  whatsappCountry     String?        @default("bj")
+  currency            String         @default("XOF")
+  taxRate             Float          @default(18)
+  quoteTemplateId     String         @default("classique")
+  receiptTitle        String         @default("Reçu d'achat")
+  active              Boolean        @default(true)
+  acceptsOrders       Boolean        @default(true)
+  paymentMode         String         @default("ONLINE")
+  commissionRate      Float          @default(0.05)
+  userId              String
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products            StoreProduct[]
+  orders              StoreOrder[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@unique([userId])
+  @@index([slug, active])
+}
+
+model StoreProduct {
+  id              String              @id @default(cuid())
+  storeId         String
+  store           Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId       String?
+  product         Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name            String
+  description     String?
+  category        String?
+  price           Float               @default(0)
+  unit            String?
+  imageUrl        String?
+  imageUrls       String[]            @default([])
+  sku             String?
+  status          StoreProductStatus  @default(DRAFT)
+  stock           Int?
+  trackStock      Boolean             @default(false)
+  allowBackorder  Boolean             @default(false)
+  variantsJson    Json?
+  featured        Boolean             @default(false)
+  order           Int                 @default(0)
+  orderItems      StoreOrderItem[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([storeId, status, order])
+  @@index([productId])
+}
+
+model StoreOrder {
+  id             String           @id @default(cuid())
+  number         String
+  storeId        String
+  store          Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quoteId        String?          @unique
+  quote          Quote?           @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  status         StoreOrderStatus @default(PENDING_PAYMENT)
+  customerName   String
+  customerEmail  String?
+  customerPhone  String
+  customerPhoneCountry String?       @default("bj")
+  customerCity   String?
+  customerAddress String?
+  customerNote   String?
+  paymentMethod  String           @default("ONLINE")
+  subtotal       Float            @default(0)
+  taxRate        Float            @default(18)
+  taxAmount      Float            @default(0)
+  total          Float            @default(0)
+  paymentRef     String?
+  paymentUrl     String?
+  paidAt         DateTime?
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  items          StoreOrderItem[]
+  payment        StorePayment?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([number, userId])
+  @@index([storeId, createdAt])
+  @@index([userId, status])
+  @@index([paymentRef])
+}
+
+model StoreOrderItem {
+  id             String        @id @default(cuid())
+  orderId        String
+  order          StoreOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  storeProductId String?
+  storeProduct   StoreProduct? @relation(fields: [storeProductId], references: [id], onDelete: SetNull)
+  productId      String?
+  name           String
+  description    String?
+  quantity       Int           @default(1)
+  unitPrice      Float         @default(0)
+  total          Float         @default(0)
+  unit           String?
+  imageUrl       String?
+  variantLabel   String?
+  sortOrder      Int           @default(0)
+
+  @@index([orderId])
+  @@index([storeProductId])
+}
+
+model StorePayment {
+  id            String        @id @default(cuid())
+  orderId       String        @unique
+  order         StoreOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  grossAmount   Float
+  commission    Float
+  netAmount     Float
+  status        PaymentStatus @default(PENDING)
+  fedapayTxId   String?
+  transferId    String?
+  transferredAt DateTime?
+  failReason    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@index([fedapayTxId])
 }
 
 model QuoteTemplate {
@@ -213,6 +371,7 @@ model Product {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   items       QuoteItem[]
+  storeProducts StoreProduct[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -235,6 +394,22 @@ model Payment {
   failReason    String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+}
+
+enum StoreProductStatus {
+  DRAFT
+  ACTIVE
+  HIDDEN
+  SOLD_OUT
+}
+
+enum StoreOrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
 }
 
 enum PaymentStatus {

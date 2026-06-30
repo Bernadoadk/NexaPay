@@ -114,7 +114,7 @@ class _PlanScreenState extends State<PlanScreen> {
                           _Feature('Gestion clients & catalogue produits', true),
                           _Feature('Export PDF — filigrane NexaPay', true),
                           _Feature('Partage WhatsApp', true),
-                          _Feature('Lien de paiement Mobile Money', false),
+                            _Feature('Lien de paiement MoMo + carte', false),
                           _Feature('Crédits IA mensuels', false),
                         ],
                         onUpgrade: null,
@@ -699,7 +699,7 @@ class _CommissionBanner extends StatelessWidget {
                         color: context.appText)),
                 const SizedBox(height: 4),
                 Text(
-                  '3% sur chaque paiement collecté via Mobile Money (MTN MoMo / Moov Money). Payé uniquement quand vous êtes payé.',
+                  '3% sur chaque paiement collecté via lien MoMo ou carte bancaire. Payé uniquement quand vous êtes payé.',
                   style: TextStyle(
                       fontSize: 12,
                       color: context.appTextMuted,

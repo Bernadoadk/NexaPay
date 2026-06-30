@@ -22,7 +22,7 @@ const PLANS = [
       'Gestion des clients',
       'Catalogue produits',
     ],
-    missing: ['Lien de paiement Mobile Money', 'Crédits IA mensuels'],
+    missing: ['Lien de paiement MoMo / carte', 'Crédits IA mensuels'],
   },
   {
     id: 'PRO' as const,
@@ -34,7 +34,7 @@ const PLANS = [
     features: [
       '30 devis par mois',
       'PDF avec modèles de devis',
-      'Lien de paiement Mobile Money',
+      'Lien de paiement MoMo / carte',
       'Suivi des paiements en temps réel',
       '80 crédits IA / mois',
     ],
@@ -51,7 +51,7 @@ const PLANS = [
     features: [
       'Devis illimités',
       'PDF avec modèles de devis',
-      'Lien de paiement Mobile Money',
+      'Lien de paiement MoMo / carte',
       'Suivi des paiements en temps réel',
       '200 crédits IA / mois',
       'Plusieurs collaborateurs (bientôt)',
@@ -402,7 +402,7 @@ export default function Pricing() {
 
         {/* Commission note */}
         <div className="mt-5 lg:mt-6 mb-3 p-3 lg:p-4 bg-surface border border-border rounded text-[12px] lg:text-[12.5px] text-text-muted text-center leading-relaxed">
-          Une commission de <strong className="text-text">3 %</strong> est prélevée sur les paiements collectés via lien Mobile Money.
+          Une commission de <strong className="text-text">3 %</strong> est prélevée sur les paiements collectés via lien MoMo / carte.
           Aucun frais fixe supplémentaire.
         </div>
       </div>

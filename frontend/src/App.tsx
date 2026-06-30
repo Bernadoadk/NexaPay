@@ -15,8 +15,12 @@ import Templates from '@/pages/Templates';
 import Settings from '@/pages/Settings';
 import Pricing from '@/pages/Pricing';
 import Payouts from '@/pages/Payouts';
+import History from '@/pages/History';
 import PaymentPage from '@/pages/PaymentPage';
 import PaymentSuccess from '@/pages/PaymentSuccess';
+import StoreManager from '@/pages/StoreManager';
+import PublicStore from '@/pages/PublicStore';
+import StoreSuccess from '@/pages/StoreSuccess';
 
 // Phone (the MoMo receiving number) is the single non-skippable field. If
 // it's missing — typically right after a Google/Apple sign-in — we force
@@ -57,6 +61,8 @@ export default function App() {
       />
       <Route path="/pay/success" element={<PaymentSuccess />} />
       <Route path="/pay/:quoteId" element={<PaymentPage />} />
+      <Route path="/store/:slug" element={<PublicStore />} />
+      <Route path="/store/:slug/success" element={<StoreSuccess />} />
       <Route
         path="/"
         element={
@@ -72,9 +78,11 @@ export default function App() {
         <Route path="quotes/:id/edit" element={<QuoteCreate />} />
         <Route path="clients" element={<Clients />} />
         <Route path="products" element={<Products />} />
+        <Route path="store" element={<StoreManager />} />
         <Route path="templates" element={<Templates />} />
         <Route path="settings" element={<Settings />} />
         <Route path="payouts" element={<Payouts />} />
+        <Route path="history" element={<History />} />
         <Route path="pricing" element={<Pricing />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -627,7 +627,7 @@ export default function QuoteCreate() {
                 {
                   state: sendMomo,
                   set: setSendMomo,
-                  label: 'Activer paiement Mobile Money',
+                  label: 'Activer paiement MoMo / carte',
                   sub: canUseMomo ? momoLabel(user?.phoneCountry ?? 'bj') : 'Réservé aux plans Pro et Business',
                   disabled: !canUseMomo,
                 },

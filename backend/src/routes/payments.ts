@@ -5,6 +5,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { activateCreditPurchase, CREDIT_PACKS, PLAN_CREDITS, PLAN_CREDIT_CAP } from './credits';
 import { syncQuoteFromFedapay } from '../lib/quoteSync';
+import { syncStoreOrderFromFedapay } from '../lib/storeSync';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -220,7 +221,7 @@ router.post('/initiate/:quoteId', authenticate, async (req: AuthRequest, res): P
     select: { plan: true, phone: true, phoneCountry: true },
   });
   if (user?.plan === 'FREE') {
-    res.status(403).json({ message: 'Le lien de paiement Mobile Money nécessite un plan Pro ou Business' });
+    res.status(403).json({ message: 'Le lien de paiement MoMo / carte nécessite un plan Pro ou Business' });
     return;
   }
 
@@ -318,7 +319,6 @@ router.post('/confirm-quote/:quoteId', async (req, res): Promise<void> => {
   }
 });
 
-// ──────────────────────────────────────────────────────────────
 // PUBLIC WEBHOOK — called by Fedapay on payment completion
 // ──────────────────────────────────────────────────────────────
 router.post('/webhook', webhookLimiter, async (req, res): Promise<void> => {
@@ -352,6 +352,17 @@ router.post('/webhook', webhookLimiter, async (req, res): Promise<void> => {
         if (quote) {
           await syncQuoteFromFedapay(quote.id, { force: true }).catch((e) =>
             console.error('[Webhook] syncQuote échec:', e.message),
+          );
+        }
+
+        // Case 1b: store order payment
+        const storeOrder = await prisma.storeOrder.findFirst({
+          where: { paymentRef: String(transId) },
+          select: { id: true },
+        });
+        if (storeOrder) {
+          await syncStoreOrderFromFedapay(storeOrder.id, { force: true }).catch((e) =>
+            console.error('[Webhook] syncStoreOrder échec:', e.message),
           );
         }
 
@@ -475,7 +486,7 @@ router.post('/confirm-upgrade', authenticate, async (req: AuthRequest, res): Pro
 });
 
 // ──────────────────────────────────────────────────────────────
-// AUTHENTICATED — upgrade plan via MoMo
+// AUTHENTICATED — upgrade plan via FedaPay checkout
 // ──────────────────────────────────────────────────────────────
 router.post('/upgrade', authenticate, async (req: AuthRequest, res): Promise<void> => {
   const { plan, interval = 'monthly' } = req.body as { plan: 'PRO' | 'BUSINESS'; interval?: 'monthly' | 'annual' };

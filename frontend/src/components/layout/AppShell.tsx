@@ -15,6 +15,7 @@ const TITLE_MAP: Record<string, { title: string; subtitle?: string }> = {
   '/quotes/new': { title: 'Créer un devis', subtitle: 'Nouveau document' },
   '/clients': { title: 'Clients', subtitle: 'Carnet d\'adresses & historique' },
   '/products': { title: 'Produits & services', subtitle: 'Gérer votre catalogue de prestations' },
+  '/history': { title: 'Historique', subtitle: 'Devis, paiements et commandes boutique' },
   '/settings': { title: 'Réglages', subtitle: 'Profil et informations de facturation' },
 };
 
@@ -24,6 +25,7 @@ const MOBILE_TITLE_MAP: Record<string, string> = {
   '/quotes/new': 'Nouveau devis',
   '/clients': 'Clients',
   '/products': 'Produits & services',
+  '/history': 'Historique',
   '/settings': 'Réglages',
   '/payouts': 'Reversements',
   '/pricing': 'Plans & crédits',

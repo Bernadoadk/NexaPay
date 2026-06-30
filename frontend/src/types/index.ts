@@ -149,6 +149,144 @@ export interface Product {
 
 export type ProductSort = 'name' | 'price-asc' | 'price-desc' | 'used' | 'recent';
 
+export type StoreProductStatus = 'DRAFT' | 'ACTIVE' | 'HIDDEN' | 'SOLD_OUT';
+export type StoreOrderStatus = 'PENDING_PAYMENT' | 'PAID' | 'PROCESSING' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED';
+export type StorePaymentMode = 'ONLINE' | 'COD' | 'BOTH';
+export type StorePaymentMethod = 'ONLINE' | 'COD';
+
+export interface GoogleFont {
+  family: string;
+  category: string;
+}
+
+export interface Store {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  themePrimaryColor: string;
+  themeAccentColor: string;
+  themeBackgroundColor: string;
+  themeSurfaceColor: string;
+  themeTextColor: string;
+  themeMutedTextColor: string;
+  themeBorderColor: string;
+  themeButtonTextColor: string;
+  themeInputBackgroundColor: string;
+  themeInputTextColor: string;
+  themeInputBorderColor: string;
+  themeFontFamily: string;
+  whatsapp?: string | null;
+  phone?: string | null;
+  phoneCountry?: string | null;
+  email?: string | null;
+  momoPhone?: string | null;
+  momoCountry?: string | null;
+  whatsappCountry?: string | null;
+  currency: string;
+  taxRate: number;
+  quoteTemplateId: string;
+  receiptTitle: string;
+  active: boolean;
+  acceptsOrders: boolean;
+  paymentMode: StorePaymentMode;
+  commissionRate: number;
+  userId: string;
+  user?: User;
+  products?: StoreProduct[];
+  _count?: { products: number; orders: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreProduct {
+  id: string;
+  storeId: string;
+  productId?: string | null;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  price: number;
+  unit?: string | null;
+  imageUrl?: string | null;
+  imageUrls: string[];
+  sku?: string | null;
+  status: StoreProductStatus;
+  stock?: number | null;
+  trackStock: boolean;
+  allowBackorder: boolean;
+  variantsJson?: unknown;
+  featured: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreOrderItem {
+  id: string;
+  orderId: string;
+  storeProductId?: string | null;
+  productId?: string | null;
+  name: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  unit?: string | null;
+  imageUrl?: string | null;
+  variantLabel?: string | null;
+  sortOrder: number;
+}
+
+export interface StorePayment {
+  id: string;
+  orderId: string;
+  userId: string;
+  grossAmount: number;
+  commission: number;
+  netAmount: number;
+  status: PayoutStatus;
+  fedapayTxId?: string | null;
+  transferId?: string | null;
+  transferredAt?: string | null;
+  failReason?: string | null;
+  createdAt: string;
+}
+
+export interface StoreOrder {
+  id: string;
+  number: string;
+  storeId: string;
+  userId: string;
+  quoteId?: string | null;
+  status: StoreOrderStatus;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone: string;
+  customerPhoneCountry?: string | null;
+  customerCity?: string | null;
+  customerAddress?: string | null;
+  customerNote?: string | null;
+  paymentMethod: StorePaymentMethod;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  paymentRef?: string | null;
+  paymentUrl?: string | null;
+  paidAt?: string | null;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  items: StoreOrderItem[];
+  payment?: StorePayment | null;
+  quote?: Quote | null;
+  store?: Store;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type PayoutStatus = 'PENDING' | 'TRANSFERRING' | 'TRANSFERRED' | 'FAILED';
 
 export interface Payout {

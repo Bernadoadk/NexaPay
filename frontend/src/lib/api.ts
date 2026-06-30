@@ -97,10 +97,34 @@ export const productsApi = {
   categories: () => api.get<string[]>('/products/categories'),
 };
 
+export const storesApi = {
+  fonts: () => api.get('/stores/fonts'),
+  slugAvailability: (slug: string) => api.get('/stores/slug-availability', { params: { slug } }),
+  me: () => api.get('/stores/me'),
+  updateMe: (data: object) => api.put('/stores/me', data),
+  stats: () => api.get('/stores/me/stats'),
+  products: () => api.get('/stores/me/products'),
+  createProduct: (data: object) => api.post('/stores/me/products', data),
+  updateProduct: (id: string, data: object) => api.put(`/stores/me/products/${id}`, data),
+  deleteProduct: (id: string) => api.delete(`/stores/me/products/${id}`),
+  orders: (params?: { status?: string }) => api.get('/stores/me/orders', { params }),
+  updateOrderStatus: (id: string, status: string) => api.patch(`/stores/me/orders/${id}/status`, { status }),
+  publicStore: (slug: string) => api.get(`/stores/public/${slug}`),
+  checkout: (slug: string, data: object) => api.post(`/stores/public/${slug}/checkout`, data),
+  publicOrder: (orderId: string) => api.get(`/stores/orders/${orderId}/public`),
+  confirmOrder: (orderId: string) => api.post(`/stores/orders/${orderId}/confirm`),
+};
+
 export const dashboardApi = {
   stats: (params?: { from?: string; to?: string }) =>
     api.get('/dashboard/stats', { params }),
 };
+
+function imageForm(file: File) {
+  const fd = new FormData();
+  fd.append('image', file);
+  return fd;
+}
 
 export const uploadApi = {
   uploadAvatar: (file: File) => {
@@ -115,6 +139,15 @@ export const uploadApi = {
     return api.post('/upload/quote-logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   deleteQuoteLogo: () => api.delete('/upload/quote-logo'),
+  uploadStoreLogo: (file: File) =>
+    api.post('/upload/store-logo', imageForm(file), { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteStoreLogo: () => api.delete('/upload/store-logo'),
+  uploadStoreCover: (file: File) =>
+    api.post('/upload/store-cover', imageForm(file), { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteStoreCover: () => api.delete('/upload/store-cover'),
+  uploadStoreProduct: (productId: string, file: File) =>
+    api.post(`/upload/store-product/${productId}`, imageForm(file), { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteStoreProductImage: (productId: string) => api.delete(`/upload/store-product/${productId}`),
 };
 
 export const paymentsApi = {

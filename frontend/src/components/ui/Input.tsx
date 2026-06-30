@@ -1,4 +1,5 @@
 import { InputHTMLAttributes, TextareaHTMLAttributes, forwardRef } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const inputBase = 'w-full h-10 px-3 rounded-sm border border-border-strong bg-surface text-[14px] text-text transition-colors focus:outline-none focus:border-primary focus:ring-3 focus:ring-primary-soft placeholder:text-text-subtle';
@@ -32,13 +33,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ label, className, id, children, ...props }, ref) => (
     <div className="flex flex-col gap-1.5">
       {label && <label htmlFor={id} className="text-[12px] font-semibold text-text-muted">{label}</label>}
-      <select
-        ref={ref} id={id}
-        className={cn(inputBase, 'appearance-none cursor-pointer', className)}
-        {...props}
-      >
-        {children}
-      </select>
+      <div className="relative">
+        <select
+          ref={ref} id={id}
+          className={cn(inputBase, 'appearance-none cursor-pointer pr-9', className)}
+          {...props}
+        >
+          {children}
+        </select>
+        <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
+      </div>
     </div>
   )
 );

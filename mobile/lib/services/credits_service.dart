@@ -18,8 +18,10 @@ class CreditsService {
   /// Kick off a Fedapay payment to buy a credit pack — returns the checkout URL.
   static Future<({String paymentUrl, String transactionId})> purchase(
       String packId) async {
-    final res = await ApiClient.instance
-        .post('/credits/purchase', data: {'packId': packId});
+    final res = await ApiClient.instance.post(
+      '/credits/purchase',
+      data: {'packId': packId},
+    );
     return (
       paymentUrl: res.data['paymentUrl'] as String,
       transactionId: '${res.data['transactionId']}',

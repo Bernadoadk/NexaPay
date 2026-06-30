@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import {
   HomeIcon, FileIcon, UsersIcon, ReceiptIcon,
   PlusIcon, LogOutIcon, SettingsIcon,
+  ClockIcon,
 } from '@/components/ui/Icon';
 import { useEntrance, useChildrenStagger } from '@/hooks/useAnime';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -33,6 +34,8 @@ const NAV_ITEMS = [
   { to: '/quotes', label: 'Devis', Icon: FileIcon, badge: null },
   { to: '/clients', label: 'Clients', Icon: UsersIcon },
   { to: '/products', label: 'Produits & services', Icon: ReceiptIcon },
+  { to: '/history', label: 'Historique', Icon: ClockIcon },
+  { to: '/store', label: 'Boutique Pro', Icon: ReceiptIcon },
   { to: '/templates', label: 'Templates', Icon: ReceiptIcon },
   { to: '/settings', label: 'Réglages', Icon: SettingsIcon },
 ];

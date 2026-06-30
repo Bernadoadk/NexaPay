@@ -148,7 +148,7 @@ export default function QuoteDetail() {
   const canUseMomo = authUser?.plan === 'PRO' || authUser?.plan === 'BUSINESS';
 
   const whatsappMessage = encodeURIComponent(
-    `Bonjour ${client?.contact || client?.name || ''}, voici le devis ${quote.number} — ${quote.title} (${fmtXOF(total)}). Lien de paiement Mobile Money : ${shareUrl}`,
+    `Bonjour ${client?.contact || client?.name || ''}, voici le devis ${quote.number} — ${quote.title} (${fmtXOF(total)}). Lien de paiement MoMo / carte bancaire : ${shareUrl}`,
   );
   const whatsappHref = client?.phone
     ? `https://wa.me/${client.phone.replace(/[^0-9]/g, '')}?text=${whatsappMessage}`
@@ -402,7 +402,7 @@ export default function QuoteDetail() {
             <Timeline events={[
               ...(quote.paidAt ? [{
                 dot: '#0F8F65',
-                title: quote.paidViaLink ? 'Paiement reçu par lien Mobile Money' : 'Marqué comme payé',
+                title: quote.paidViaLink ? 'Paiement reçu par lien MoMo / carte' : 'Marqué comme payé',
                 time: fmtDateFR(quote.paidAt),
               }] : []),
               ...(awaitingPayment ? [{
@@ -572,7 +572,7 @@ export default function QuoteDetail() {
             <div className="bg-surface border border-border rounded shadow-sm p-[18px]">
               <div className="text-[13px] font-semibold mb-1">Lien de paiement</div>
               <div className="text-[12px] text-text-muted mb-3">
-                Générez un lien Mobile Money à envoyer à votre client — le statut se mettra à jour automatiquement après paiement.
+                Générez un lien MoMo / carte bancaire à envoyer à votre client — le statut se mettra à jour automatiquement après paiement.
               </div>
               <Button
                 variant="primary" size="sm"

@@ -20,10 +20,24 @@ const upload = multer({
   },
 });
 
-function uploadToCloudinary(buffer: Buffer, folder: string, publicId?: string): Promise<{ url: string; publicId: string }> {
+function uploadToCloudinary(
+  buffer: Buffer,
+  folder: string,
+  publicId?: string,
+  transformation?: object[],
+): Promise<{ url: string; publicId: string }> {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder, public_id: publicId, overwrite: true, resource_type: 'image' },
+      {
+        folder,
+        public_id: publicId,
+        overwrite: true,
+        invalidate: true,
+        resource_type: 'image',
+        format: 'webp',
+        quality: 'auto',
+        transformation,
+      },
       (err, result) => {
         if (err || !result) return reject(err ?? new Error('Upload échoué'));
         resolve({ url: result.secure_url, publicId: result.public_id });
@@ -107,6 +121,84 @@ router.delete('/quote-logo', authenticate, async (req: AuthRequest, res): Promis
     select: USER_SELECT,
   });
 
+  res.json(updated);
+});
+
+// POST /api/upload/store-logo
+router.post('/store-logo', authenticate, upload.single('image'), async (req: AuthRequest, res): Promise<void> => {
+  if (!req.file) { res.status(400).json({ message: 'Aucun fichier reçu' }); return; }
+  const store = await prisma.store.findUnique({ where: { userId: req.userId! }, select: { id: true } });
+  if (!store) { res.status(404).json({ message: 'Boutique introuvable' }); return; }
+
+  const { url } = await uploadToCloudinary(
+    req.file.buffer,
+    'NexaPay/stores/logos',
+    `store_logo_${store.id}`,
+    [{ width: 600, height: 600, crop: 'fill', gravity: 'auto' }],
+  );
+  const updated = await prisma.store.update({ where: { id: store.id }, data: { logoUrl: url } });
+  res.json(updated);
+});
+
+router.delete('/store-logo', authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const store = await prisma.store.findUnique({ where: { userId: req.userId! }, select: { id: true } });
+  if (!store) { res.status(404).json({ message: 'Boutique introuvable' }); return; }
+  await deleteCloudinaryImage(`NexaPay/stores/logos/store_logo_${store.id}`);
+  const updated = await prisma.store.update({ where: { id: store.id }, data: { logoUrl: null } });
+  res.json(updated);
+});
+
+// POST /api/upload/store-cover
+router.post('/store-cover', authenticate, upload.single('image'), async (req: AuthRequest, res): Promise<void> => {
+  if (!req.file) { res.status(400).json({ message: 'Aucun fichier reçu' }); return; }
+  const store = await prisma.store.findUnique({ where: { userId: req.userId! }, select: { id: true } });
+  if (!store) { res.status(404).json({ message: 'Boutique introuvable' }); return; }
+
+  const { url } = await uploadToCloudinary(
+    req.file.buffer,
+    'NexaPay/stores/covers',
+    `store_cover_${store.id}`,
+    [{ width: 1800, height: 720, crop: 'fill', gravity: 'auto' }],
+  );
+  const updated = await prisma.store.update({ where: { id: store.id }, data: { coverImageUrl: url } });
+  res.json(updated);
+});
+
+router.delete('/store-cover', authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const store = await prisma.store.findUnique({ where: { userId: req.userId! }, select: { id: true } });
+  if (!store) { res.status(404).json({ message: 'Boutique introuvable' }); return; }
+  await deleteCloudinaryImage(`NexaPay/stores/covers/store_cover_${store.id}`);
+  const updated = await prisma.store.update({ where: { id: store.id }, data: { coverImageUrl: null } });
+  res.json(updated);
+});
+
+// POST /api/upload/store-product/:productId
+router.post('/store-product/:productId', authenticate, upload.single('image'), async (req: AuthRequest, res): Promise<void> => {
+  if (!req.file) { res.status(400).json({ message: 'Aucun fichier reçu' }); return; }
+  const product = await prisma.storeProduct.findFirst({
+    where: { id: String(req.params.productId), store: { userId: req.userId! } },
+    select: { id: true },
+  });
+  if (!product) { res.status(404).json({ message: 'Produit boutique introuvable' }); return; }
+
+  const { url } = await uploadToCloudinary(
+    req.file.buffer,
+    'NexaPay/stores/products',
+    `store_product_${product.id}`,
+    [{ width: 1200, height: 900, crop: 'fill', gravity: 'auto' }],
+  );
+  const updated = await prisma.storeProduct.update({ where: { id: product.id }, data: { imageUrl: url } });
+  res.json(updated);
+});
+
+router.delete('/store-product/:productId', authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const product = await prisma.storeProduct.findFirst({
+    where: { id: String(req.params.productId), store: { userId: req.userId! } },
+    select: { id: true },
+  });
+  if (!product) { res.status(404).json({ message: 'Produit boutique introuvable' }); return; }
+  await deleteCloudinaryImage(`NexaPay/stores/products/store_product_${product.id}`);
+  const updated = await prisma.storeProduct.update({ where: { id: product.id }, data: { imageUrl: null } });
   res.json(updated);
 });
 

@@ -168,7 +168,7 @@ export default function Payouts() {
           <div className="bg-surface border border-border border-dashed rounded p-10 text-center">
             <div className="text-[15px] font-semibold mb-1">Aucun reversement pour le moment</div>
             <div className="text-[13px] text-text-muted">
-              Dès qu'un client paiera un devis via votre lien Mobile Money, vous verrez le reversement ici.
+              Dès qu'un client paiera un devis via votre lien MoMo / carte, vous verrez le reversement ici.
             </div>
           </div>
         ) : (
@@ -201,7 +201,7 @@ export default function Payouts() {
             Comment fonctionne le reversement ?
           </summary>
           <div className="px-4 pb-4 text-[12.5px] text-text-muted leading-relaxed flex flex-col gap-2">
-            <p>1. Votre client paie le devis via votre lien Mobile Money ou par carte bancaire. L'argent atterrit dans le compte sécurisé NexaPay (Fedapay).</p>
+            <p>1. Votre client paie le devis via votre lien MoMo / carte. L'argent atterrit dans le compte sécurisé NexaPay (Fedapay).</p>
             <p>2. <strong className="text-text">Immédiatement après</strong>, NexaPay prélève sa commission de 3 % et déclenche un transfert du net (97 %) vers votre numéro MoMo enregistré.</p>
             <p>3. Vous recevez l'argent sur votre MoMo en quelques secondes (jusqu'à quelques minutes selon l'opérateur). Vous voyez le statut passer en <strong className="text-[#0C7A56]">Reversé</strong> sur cette page.</p>
             <p>4. En cas d'échec (numéro invalide, opérateur HS…), le statut passe en <strong className="text-danger">Échec</strong> avec le détail. Vous pouvez relancer en un clic — votre argent reste sécurisé chez nous tant qu'il n'est pas réussi.</p>

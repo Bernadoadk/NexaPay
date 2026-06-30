@@ -9,7 +9,7 @@ import appleSignin from 'apple-signin-auth';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { sendOtpEmail } from '../utils/email';
-import { toE164 } from '../utils/phone';
+import { countryFromPhone, toE164 } from '../utils/phone';
 import { deleteCloudinaryImage } from '../lib/cloudinary';
 
 const router = Router();
@@ -93,7 +93,7 @@ router.post(
       if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
 
       const { email, password, name, companyName, phoneCountry } = req.body;
-      const country = phoneCountry || 'bj';
+      const country = countryFromPhone(req.body.phone, phoneCountry || 'bj');
       const phone = req.body.phone ? toE164(req.body.phone, country) : undefined;
       const existing = await prisma.user.findUnique({ where: { email } });
 
@@ -408,7 +408,7 @@ router.get('/export-data', authenticate, async (req: AuthRequest, res): Promise<
 
 router.put('/me', authenticate, async (req: AuthRequest, res): Promise<void> => {
   const { name, companyName, phoneCountry, address, ifu, rccm, useProfilePhotoAsLogo } = req.body;
-  const country = phoneCountry || 'bj';
+  const country = countryFromPhone(req.body.phone, phoneCountry || 'bj');
   const phone = req.body.phone !== undefined
     ? (req.body.phone ? toE164(req.body.phone, country) : '')
     : undefined;

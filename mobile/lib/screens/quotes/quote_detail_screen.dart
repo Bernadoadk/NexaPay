@@ -229,7 +229,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Text(
-              'Partagez ce lien avec votre client pour collecter le paiement via Mobile Money.',
+              'Partagez ce lien avec votre client pour collecter le paiement via Mobile Money ou carte bancaire.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 13, color: context.appTextMuted, height: 1.5),

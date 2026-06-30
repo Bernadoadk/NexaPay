@@ -1,4 +1,4 @@
-import { COUNTRIES, formatLocalDigits, getCountry, getPlaceholder } from '@/lib/phone';
+import { COUNTRIES, cleanCountryCode, formatLocalDigits, getCountry, getPlaceholder, parsePhoneInput } from '@/lib/phone';
 
 // Re-export for consumers that previously imported FEDAPAY_COUNTRIES from here
 export { COUNTRIES as FEDAPAY_COUNTRIES } from '@/lib/phone';
@@ -10,6 +10,7 @@ interface Props {
   onPhoneChange: (v: string) => void;
   onCountryChange: (v: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 export default function PhoneCountryInput({
@@ -18,11 +19,14 @@ export default function PhoneCountryInput({
   country,
   onPhoneChange,
   onCountryChange,
+  disabled,
 }: Props) {
-  const selected = getCountry(country);
+  const selected = getCountry(cleanCountryCode(country));
 
   function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
-    onPhoneChange(formatLocalDigits(e.target.value, selected.groups));
+    const parsed = parsePhoneInput(e.target.value, selected.code);
+    if (parsed.country.code !== selected.code) onCountryChange(parsed.country.code);
+    onPhoneChange(parsed.local);
   }
 
   function handleCountryChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -41,13 +45,14 @@ export default function PhoneCountryInput({
       <div className="flex h-10 rounded-sm border border-border-strong bg-surface overflow-hidden focus-within:border-primary focus-within:ring-3 focus-within:ring-primary-soft transition-colors">
         <div className="relative flex-shrink-0">
           <select
-            value={country}
+            value={selected.code}
             onChange={handleCountryChange}
+            disabled={disabled}
             className="h-full appearance-none bg-surface-2 border-r border-border-strong pl-2 pr-6 text-[13px] text-text cursor-pointer focus:outline-none"
           >
             {COUNTRIES.map(c => (
-              <option key={c.code} value={c.code}>
-                {c.flag} {c.dial}
+              <option key={c.code} value={c.code} title={c.name}>
+                {c.flag} {c.dial} · {c.name}
               </option>
             ))}
           </select>
@@ -57,6 +62,7 @@ export default function PhoneCountryInput({
           type="tel"
           value={phone}
           onChange={handlePhoneChange}
+          disabled={disabled}
           placeholder={getPlaceholder(selected.groups)}
           className="flex-1 min-w-0 px-3 bg-transparent text-[14px] text-text placeholder:text-text-subtle focus:outline-none font-mono tracking-wide"
         />

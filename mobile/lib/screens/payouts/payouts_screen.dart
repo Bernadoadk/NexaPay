@@ -644,7 +644,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Dès qu’un client paiera un devis via votre lien Mobile Money, '
+            'Dès qu’un client paiera un devis via votre lien MoMo / carte, '
             'vous verrez le reversement ici.',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -708,8 +708,8 @@ class _HowItWorksState extends State<_HowItWorks> {
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               child: Text(
-                '1. Votre client paie le devis via votre lien Mobile Money '
-                'ou par carte bancaire. L’argent atterrit dans le compte '
+                '1. Votre client paie le devis via votre lien MoMo / carte. '
+                'L’argent atterrit dans le compte '
                 'sécurisé NexaPay (Fedapay).\n\n'
                 '2. Immédiatement après, NexaPay prélève sa commission de '
                 '3 % et déclenche un transfert du net (97 %) vers votre '

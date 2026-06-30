@@ -10,7 +10,7 @@ class PaymentService {
     return Quota.fromJson(res.data);
   }
 
-  // ── Quote payment link (Fedapay checkout for the freelancer's client) ────
+  // ── Quote payment link ───────────────────────────────────────────────────
   static Future<({String paymentUrl, String shareUrl})> initiatePayment(
       String quoteId) async {
     final res =
@@ -70,8 +70,7 @@ class PaymentService {
 
   /// Re-tries a failed payout to the user's MoMo number.
   static Future<Payout> retryPayout(String paymentId) async {
-    final res =
-        await ApiClient.instance.post('/payments/$paymentId/retry');
+    final res = await ApiClient.instance.post('/payments/$paymentId/retry');
     return Payout.fromJson(res.data);
   }
 

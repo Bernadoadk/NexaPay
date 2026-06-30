@@ -399,4 +399,3 @@ class _DefaultPacks extends StatelessWidget {
     );
   }
 }
-

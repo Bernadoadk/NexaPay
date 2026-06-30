@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { toE164 } from '../utils/phone';
+import { countryFromPhone, toE164 } from '../utils/phone';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -50,7 +50,7 @@ router.post(
     const count = await prisma.client.count({ where: { userId: req.userId } });
     const color = req.body.color || COLORS[count % COLORS.length];
     const { name, contact, email, city, address, ifu } = req.body;
-    const phoneCountry = req.body.phoneCountry || 'bj';
+    const phoneCountry = countryFromPhone(req.body.phone, req.body.phoneCountry || 'bj');
     const phone = req.body.phone ? toE164(req.body.phone, phoneCountry) : undefined;
 
     const client = await prisma.client.create({
@@ -76,7 +76,7 @@ router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
   if (!exists) { res.status(404).json({ message: 'Client introuvable' }); return; }
   // Strip virtual/computed fields and immutable fields
   const { userId: _, id: _id, quotesCount: _qc, totalBilled: _tb, createdAt: _ca, updatedAt: _ua, ...rest } = req.body;
-  const phoneCountry = rest.phoneCountry || exists.phoneCountry || 'bj';
+  const phoneCountry = countryFromPhone(rest.phone, rest.phoneCountry || exists.phoneCountry || 'bj');
   const data = {
     ...rest,
     phoneCountry,

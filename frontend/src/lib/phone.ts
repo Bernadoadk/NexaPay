@@ -71,6 +71,37 @@ export function getCountry(code: string): Country {
   return COUNTRIES.find(c => c.code === code) ?? COUNTRIES[0];
 }
 
+export function cleanCountryCode(code?: string | null): string {
+  const value = String(code ?? '').trim().toLowerCase();
+  return COUNTRIES.some(c => c.code === value) ? value : COUNTRIES[0].code;
+}
+
+function normaliseInternationalPrefix(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('00')) return `+${trimmed.slice(2)}`;
+  return trimmed;
+}
+
+export function detectCountryFromPhoneInput(value: string): Country | null {
+  const normalised = normaliseInternationalPrefix(value).replace(/[^\d+]/g, '');
+  if (!normalised.startsWith('+')) return null;
+  const sorted = [...COUNTRIES].sort((a, b) => b.dialDigits.length - a.dialDigits.length);
+  return sorted.find(country => normalised.startsWith(country.dial)) ?? null;
+}
+
+export function parsePhoneInput(value: string, currentCountryCode: string): { country: Country; local: string } {
+  const current = getCountry(cleanCountryCode(currentCountryCode));
+  const normalised = normaliseInternationalPrefix(value).replace(/[^\d+]/g, '');
+  const detected = detectCountryFromPhoneInput(value);
+  if (detected && normalised.startsWith(detected.dial)) {
+    return {
+      country: detected,
+      local: formatLocalDigits(normalised.slice(detected.dial.length), detected.groups),
+    };
+  }
+  return { country: current, local: formatLocalDigits(value, current.groups) };
+}
+
 export function getPlaceholder(groups: number[]): string {
   return groups.map(g => '0'.repeat(g)).join(' ');
 }
@@ -91,7 +122,12 @@ export function formatLocalDigits(digits: string, groups: number[]): string {
 
 /** Local formatted phone + country code → E.164 ("+22997000000") */
 export function toE164(localPhone: string, countryCode: string): string {
-  const country = getCountry(countryCode);
+  const detected = detectCountryFromPhoneInput(localPhone);
+  if (detected) {
+    const normalised = normaliseInternationalPrefix(localPhone);
+    return `+${normalised.replace(/\D/g, '')}`;
+  }
+  const country = getCountry(cleanCountryCode(countryCode));
   const digits = localPhone.replace(/\D/g, '');
   if (!digits) return '';
   return `${country.dial}${digits}`;
@@ -99,12 +135,13 @@ export function toE164(localPhone: string, countryCode: string): string {
 
 /** E.164 → { country, local formatted } — returns null if unrecognised */
 export function fromE164(e164: string): { country: Country; local: string } | null {
-  if (!e164?.startsWith('+')) return null;
+  const normalised = normaliseInternationalPrefix(e164);
+  if (!normalised?.startsWith('+')) return null;
   // Try longest dial prefix first
   const sorted = [...COUNTRIES].sort((a, b) => b.dialDigits.length - a.dialDigits.length);
   for (const country of sorted) {
-    if (e164.startsWith(country.dial)) {
-      const localDigits = e164.slice(country.dial.length);
+    if (normalised.startsWith(country.dial)) {
+      const localDigits = normalised.slice(country.dial.length);
       return { country, local: formatLocalDigits(localDigits, country.groups) };
     }
   }
@@ -116,7 +153,7 @@ export function fromE164(e164: string): { country: Country; local: string } | nu
  * Falls back to local→E.164 conversion using countryCode hint.
  */
 export function normaliseToE164(phone: string, countryCode: string): string {
-  if (phone?.startsWith('+')) return phone;
+  if (phone?.trim().startsWith('+') || phone?.trim().startsWith('00')) return toE164(phone, countryCode);
   return toE164(phone, countryCode);
 }
 
