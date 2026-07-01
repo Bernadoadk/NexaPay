@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { quotesApi, clientsApi, productsApi, aiApi, creditsApi, paymentsApi, quoteTemplatesApi } from '@/lib/api';
+import { quotesApi, clientsApi, productsApi, creditsApi, paymentsApi, quoteTemplatesApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { momoLabel } from '@/lib/phone';
 import { fmtXOF } from '@/lib/utils';
 import type { Client, QuoteItem, Product, Quote, QuoteTemplate } from '@/types';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
+import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import SaveQuoteTemplateModal from '@/components/quotes/SaveQuoteTemplateModal';
 import {
   ChevronRightIcon, TrashIcon, PlusIcon, ReceiptIcon,
@@ -153,41 +154,8 @@ export default function QuoteCreate() {
     applyTemplate(template);
   }, [templates, searchParams, isEdit]);
 
-  async function handleAiGenerate() {
-    if (!aiDescription.trim()) return;
-    setAiLoading(true);
-    setAiError('');
-    try {
-      const res = await aiApi.generateQuote(aiDescription);
-      const { title: aiTitle, items: aiItems, aiCredits: remaining } = res.data;
-      if (aiTitle) setTitle(aiTitle);
-      if (aiItems?.length) {
-        setItems(aiItems.map((it: { description: string; quantity: number; unitPrice: number }, i: number) => ({
-          _key: Date.now() + i,
-          description: it.description,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          total: it.quantity * it.unitPrice,
-        })));
-      }
-      setAiCredits(remaining);
-      setShowAiPanel(false);
-      setAiDescription('');
-    } catch (err: any) {
-      const msg = err.response?.data?.message || 'Erreur IA';
-      setAiError(msg);
-      if (err.response?.data?.aiCredits !== undefined) setAiCredits(err.response.data.aiCredits);
-    } finally {
-      setAiLoading(false);
-      qc.invalidateQueries({ queryKey: ['credits'] });
-    }
-  }
-
   const [saveError, setSaveError] = useState('');
-  const [aiDescription, setAiDescription] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState('');
-  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [showAiComingSoon, setShowAiComingSoon] = useState(false);
   const [aiCredits, setAiCredits] = useState<number | null>(null);
 
   useEffect(() => {
@@ -495,56 +463,16 @@ export default function QuoteCreate() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowAiPanel(p => !p); setAiError(''); }}
+                  onClick={() => setShowAiComingSoon(true)}
                   className="flex items-center gap-1.5 h-8 px-3 text-[13px] text-primary font-medium rounded hover:bg-primary-soft transition-colors border border-primary/20"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
                   Générer avec IA
-                  {aiCredits !== null && (
-                    <span className="text-[11px] text-text-muted ml-0.5">({aiCredits} crédit{aiCredits !== 1 ? 's' : ''})</span>
-                  )}
+                  <span className="text-[11px] text-text-muted ml-0.5">
+                    {aiCredits !== null ? `(${aiCredits} crédit${aiCredits !== 1 ? 's' : ''} - bientôt)` : '(bientôt)'}
+                  </span>
                 </button>
               </div>
-
-              {/* Panneau IA */}
-              {showAiPanel && (
-                <div className="mx-5 mb-4 p-4 bg-primary-soft border border-primary/20 rounded">
-                  <div className="text-[12.5px] font-semibold text-primary mb-2">
-                    Décrivez votre prestation — l'IA génère le devis automatiquement (1 crédit)
-                  </div>
-                  <textarea
-                    rows={3}
-                    value={aiDescription}
-                    onChange={e => setAiDescription(e.target.value)}
-                    placeholder="Ex : Pose de carrelage 20m², matériaux inclus, appartement Cotonou..."
-                    className="w-full px-3 py-2 rounded-sm border border-primary/30 bg-white text-[13px] focus:outline-none focus:border-primary resize-none mb-2"
-                  />
-                  {aiError && <div className="text-[12px] text-red-600 mb-2">{aiError}</div>}
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      loading={aiLoading}
-                      onClick={handleAiGenerate}
-                      disabled={!aiDescription.trim() || (aiCredits !== null && aiCredits < 1)}
-                    >
-                      Générer le devis
-                    </Button>
-                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowAiPanel(false)}>
-                      Annuler
-                    </Button>
-                  </div>
-                  {aiCredits !== null && aiCredits < 1 && (
-                    <div className="mt-2 text-[12px] text-amber-700">
-                      Crédits insuffisants —{' '}
-                      <button type="button" onClick={() => navigate('/pricing')} className="underline font-medium">
-                        acheter des crédits
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Notes */}
@@ -729,6 +657,8 @@ export default function QuoteCreate() {
           onClose={() => setShowTemplatePicker(false)}
         />
       )}
+
+      <AiComingSoonDialog open={showAiComingSoon} onClose={() => setShowAiComingSoon(false)} />
 
       {showSaveTemplateModal && (
         <SaveQuoteTemplateModal

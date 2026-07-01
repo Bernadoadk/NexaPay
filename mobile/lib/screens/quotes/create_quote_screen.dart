@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:dio/dio.dart';
 import '../../theme.dart';
 import '../../models/quote.dart';
 import '../../models/quote_draft_template.dart';
@@ -10,9 +9,9 @@ import '../../providers/quotes_provider.dart';
 import '../../providers/clients_provider.dart';
 import '../../providers/products_provider.dart';
 import '../../providers/credits_provider.dart';
-import '../../services/ai_service.dart';
 import '../../services/quote_service.dart';
 import '../../services/quote_template_service.dart';
+import '../../widgets/ai_coming_soon_dialog.dart';
 import '../../widgets/template_selector_sheet.dart';
 import '../../widgets/avatar_widget.dart';
 
@@ -96,16 +95,6 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   bool _loading = false;
   String? _error;
 
-  // — IA panel state ----------------------------------------------------------
-  // `_aiOpen` toggles the inline panel under the lines card. The textarea lives
-  // in `_aiDescCtrl`. Credit balance comes from `CreditsProvider`, refreshed
-  // after every generation (success OR failure — the backend refunds on error
-  // but we re-sync to be safe).
-  final _aiDescCtrl = TextEditingController();
-  bool _aiOpen = false;
-  bool _aiLoading = false;
-  String? _aiError;
-
   @override
   void initState() {
     super.initState();
@@ -130,7 +119,6 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   void dispose() {
     _titleCtrl.dispose();
     _notesCtrl.dispose();
-    _aiDescCtrl.dispose();
     for (final l in _lines) {
       l.dispose();
     }
@@ -209,64 +197,6 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
       setState(() => _error = 'Erreur inattendue');
     } finally {
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  /// AI-driven quote generation. Calls `/ai/generate-quote` with the user's
-  /// freeform description and rewrites `_titleCtrl` + `_lines` with the result.
-  /// One credit is debited server-side; refunded automatically on failure.
-  Future<void> _runAiGeneration() async {
-    final desc = _aiDescCtrl.text.trim();
-    if (desc.isEmpty) return;
-    setState(() {
-      _aiLoading = true;
-      _aiError = null;
-    });
-    try {
-      final res = await AiService.generateQuote(desc);
-      if (!mounted) return;
-      setState(() {
-        if (res.title != null && res.title!.trim().isNotEmpty) {
-          _titleCtrl.text = res.title!.trim();
-        }
-        if (res.items.isNotEmpty) {
-          // Replace existing lines entirely — mirrors the web behaviour. The
-          // user can still tweak them line-by-line after the panel closes.
-          for (final l in _lines) {
-            l.dispose();
-          }
-          _lines
-            ..clear()
-            ..addAll(res.items.map((it) {
-              return _LineItem()
-                ..desc.text = it.description
-                ..qty.text = it.quantity == it.quantity.truncate()
-                    ? it.quantity.toInt().toString()
-                    : it.quantity.toString()
-                ..price.text = it.unitPrice.toStringAsFixed(0);
-            }));
-        }
-        _aiOpen = false;
-        _aiDescCtrl.clear();
-      });
-    } on DioException catch (e) {
-      final body = e.response?.data;
-      final msg = (body is Map ? body['message'] : null) as String?;
-      setState(() => _aiError = msg ?? 'Erreur IA — réessayez');
-      // Server may include the up-to-date credit count in the error body —
-      // surface it immediately so the chip stays accurate even on failure.
-      if (body is Map && body['aiCredits'] is num) {
-        context.read<CreditsProvider>().localUseCredit(0); // touch
-      }
-    } catch (_) {
-      setState(() => _aiError = 'Erreur IA — réessayez');
-    } finally {
-      if (mounted) {
-        setState(() => _aiLoading = false);
-        // Always re-sync the balance — covers both success-debit and
-        // failure-refund paths from the backend.
-        context.read<CreditsProvider>().refresh(silent: true);
-      }
     }
   }
 
@@ -833,24 +763,16 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
           ),
           const SizedBox(height: 8),
           _buildAiTrigger(),
-          if (_aiOpen) ...[
-            const SizedBox(height: 10),
-            _buildAiPanel(),
-          ],
         ],
       ),
     );
   }
 
-  /// Compact full-width button that toggles the AI panel. Shows the current
-  /// credit balance inline so the user knows the cost before opening it.
+  /// Compact full-width button for the AI quote generator placeholder.
   Widget _buildAiTrigger() {
     final credits = context.watch<CreditsProvider>().aiCredits;
     return GestureDetector(
-      onTap: () => setState(() {
-        _aiOpen = !_aiOpen;
-        _aiError = null;
-      }),
+      onTap: () => showAiComingSoonDialog(context),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
         decoration: BoxDecoration(
@@ -883,7 +805,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '$credits crédit${credits == 1 ? '' : 's'}',
+                '$credits crédit${credits == 1 ? '' : 's'} · bientôt',
                 style: const TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w700,
@@ -892,162 +814,13 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(
-              _aiOpen
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.keyboard_arrow_down_rounded,
+            const Icon(
+              Icons.schedule_rounded,
               size: 18,
               color: Colors.white,
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  /// Inline panel: textarea + Generate / Cancel + low-credit upsell.
-  Widget _buildAiPanel() {
-    final credits = context.watch<CreditsProvider>().aiCredits;
-    final canGenerate =
-        !_aiLoading && credits >= 1 && _aiDescCtrl.text.trim().isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Décrivez votre prestation — l\'IA génère le devis (1 crédit).',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _aiDescCtrl,
-            maxLines: 3,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'Ex : Pose de carrelage 20 m², matériaux inclus, '
-                  'appartement Cotonou…',
-              hintStyle: TextStyle(fontSize: 12.5, color: context.appTextMuted),
-              filled: true,
-              fillColor: context.appSurface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    BorderSide(color: AppColors.primary.withOpacity(0.3)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    BorderSide(color: AppColors.primary.withOpacity(0.3)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5),
-              ),
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            ),
-            style: const TextStyle(fontSize: 13),
-          ),
-          if (_aiError != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              _aiError!,
-              style: TextStyle(fontSize: 12, color: AppColors.statusOverdue),
-            ),
-          ],
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: canGenerate ? _runAiGeneration : null,
-                icon: _aiLoading
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Icon(Icons.auto_awesome_rounded, size: 14),
-                label: Text(_aiLoading ? 'Génération…' : 'Générer'),
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  minimumSize: Size.zero,
-                  textStyle: const TextStyle(
-                      fontSize: 12.5, fontWeight: FontWeight.w700),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed:
-                    _aiLoading ? null : () => setState(() => _aiOpen = false),
-                style: TextButton.styleFrom(
-                  foregroundColor: context.appTextMuted,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  minimumSize: Size.zero,
-                  textStyle: const TextStyle(fontSize: 12.5),
-                ),
-                child: const Text('Annuler'),
-              ),
-            ],
-          ),
-          if (credits < 1) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFCD34D)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      size: 14, color: Color(0xFF92400E)),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text(
-                      'Crédits insuffisants pour générer.',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: Color(0xFF92400E),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pushNamed('/credits'),
-                    child: const Text(
-                      'Acheter',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF92400E),
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }

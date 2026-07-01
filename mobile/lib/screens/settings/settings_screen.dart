@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/phone.dart';
 import '../../widgets/avatar_widget.dart';
+import '../../widgets/ai_coming_soon_dialog.dart';
 import '../../widgets/slide_in.dart';
 import '../plan/plan_screen.dart';
 
@@ -215,9 +216,8 @@ class SettingsScreen extends StatelessWidget {
                   _Item(
                       icon: Icons.auto_awesome_rounded,
                       label: 'Crédits IA',
-                      subtitle: 'Solde et achat de crédits supplémentaires',
-                      onTap: () =>
-                          Navigator.of(context).pushNamed('/credits')),
+                      subtitle: 'Disponible prochainement',
+                      onTap: () => showAiComingSoonDialog(context)),
                   _Item(
                       icon: Icons.receipt_outlined,
                       label: 'Modèles de devis',

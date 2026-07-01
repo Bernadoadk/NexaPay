@@ -5,6 +5,7 @@ import '../../theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/quota.dart';
 import '../../services/payment_service.dart';
+import '../../widgets/ai_coming_soon_dialog.dart';
 import '../../widgets/slide_in.dart';
 
 class PlanScreen extends StatefulWidget {
@@ -110,12 +111,12 @@ class _PlanScreenState extends State<PlanScreen> {
                         isCurrent: currentPlan == 'FREE',
                         features: const [
                           _Feature('5 devis par mois', true),
-                          _Feature('10 crédits IA à l\'inscription', true),
+                          _Feature('IA bientôt disponible', true),
                           _Feature('Gestion clients & catalogue produits', true),
                           _Feature('Export PDF — filigrane NexaPay', true),
                           _Feature('Partage WhatsApp', true),
-                            _Feature('Lien de paiement MoMo + carte', false),
-                          _Feature('Crédits IA mensuels', false),
+                          _Feature('Lien de paiement MoMo + carte', false),
+                          _Feature('Crédits IA mensuels (bientôt)', false),
                         ],
                         onUpgrade: null,
                         loading: false,
@@ -133,13 +134,15 @@ class _PlanScreenState extends State<PlanScreen> {
                           popular: true,
                           features: const [
                             _Feature('30 devis par mois', true),
-                            _Feature('80 crédits IA inclus / mois', true),
+                            _Feature(
+                                '80 crédits IA inclus / mois (bientôt)', true),
                             _Feature('PDF sans filigrane', true),
                             _Feature('Lien de paiement MoMo + carte', true),
                             _Feature('Suivi des paiements temps réel', true),
                             _Feature('Reversement MoMo automatique (97 %)', true),
                           ],
-                          onUpgrade: currentPlan == 'PRO' || currentPlan == 'BUSINESS'
+                          onUpgrade: currentPlan == 'PRO' ||
+                                  currentPlan == 'BUSINESS'
                               ? null
                               : () => _upgrade('PRO'),
                           loading: _upgradingPlan == 'PRO',
@@ -157,7 +160,8 @@ class _PlanScreenState extends State<PlanScreen> {
                           isCurrent: currentPlan == 'BUSINESS',
                           features: const [
                             _Feature('Devis illimités', true),
-                            _Feature('200 crédits IA inclus / mois', true),
+                            _Feature(
+                                '200 crédits IA inclus / mois (bientôt)', true),
                             _Feature('PDF sans filigrane', true),
                             _Feature('Lien de paiement MoMo + carte', true),
                             _Feature('Reversement MoMo automatique (97 %)', true),
@@ -611,7 +615,7 @@ class _BuyCreditsCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => Navigator.of(context).pushNamed('/credits'),
+        onTap: () => showAiComingSoonDialog(context),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -634,7 +638,7 @@ class _BuyCreditsCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Acheter des crédits IA',
+                    Text('Crédits IA bientôt disponibles',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -642,7 +646,7 @@ class _BuyCreditsCard extends StatelessWidget {
                         )),
                     const SizedBox(height: 2),
                     Text(
-                      '10 / 30 / 100 crédits à la demande, sans changer de plan',
+                      'Les achats de crédits IA seront ouverts prochainement.',
                       style: TextStyle(
                           fontSize: 12, color: context.appTextMuted),
                     ),

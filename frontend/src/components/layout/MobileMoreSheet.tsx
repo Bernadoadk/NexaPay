@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { creditsApi } from '@/lib/api';
 import Avatar from '@/components/ui/Avatar';
+import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import PwaInstallSheet from './PwaInstallSheet';
 import {
   DownloadIcon, ReceiptIcon, SettingsIcon, WalletIcon, LogOutIcon, XIcon, ChevronRightIcon, ClockIcon,
@@ -24,6 +25,7 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [installOpen, setInstallOpen] = useState(false);
+  const [showAiComingSoon, setShowAiComingSoon] = useState(false);
 
   // Lock body scroll behind the sheet
   useEffect(() => {
@@ -111,7 +113,7 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
 
         {/* AI credits card */}
         <button
-          onClick={() => go('/pricing')}
+          onClick={() => setShowAiComingSoon(true)}
           className="mx-4 mt-3 mb-1 w-[calc(100%-2rem)] p-3 rounded-lg bg-primary-soft border border-primary-soft-2 flex items-center gap-3 text-left active:scale-[0.98] transition-transform"
         >
           <div className="w-9 h-9 rounded-md bg-white/60 dark:bg-black/20 grid place-items-center flex-shrink-0">
@@ -131,7 +133,7 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
             </div>
           </div>
           <span className="text-[11.5px] font-semibold text-primary-hover whitespace-nowrap">
-            + Acheter
+            Bientôt
           </span>
         </button>
 
@@ -205,6 +207,7 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
       </div>
       </div>
       <PwaInstallSheet open={installOpen} onClose={() => setInstallOpen(false)} />
+      <AiComingSoonDialog open={showAiComingSoon} onClose={() => setShowAiComingSoon(false)} />
     </>
   );
 }

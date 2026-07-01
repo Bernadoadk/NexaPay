@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { paymentsApi, creditsApi, authApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
+import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import { ChevronLeftIcon } from '@/components/ui/Icon';
 import { Check } from 'lucide-react';
 import type { CreditPack } from '@/types';
@@ -15,14 +16,14 @@ const PLANS = [
     monthlyPrice: 0,
     description: 'Idéal pour démarrer',
     credits: 10,
-    creditsLabel: '10 crédits à l\'inscription',
+    creditsLabel: 'IA bientôt disponible',
     features: [
       '5 devis par mois',
       'PDF avec modèles de devis',
       'Gestion des clients',
       'Catalogue produits',
     ],
-    missing: ['Lien de paiement MoMo / carte', 'Crédits IA mensuels'],
+    missing: ['Lien de paiement MoMo / carte', 'Crédits IA mensuels (bientôt)'],
   },
   {
     id: 'PRO' as const,
@@ -30,13 +31,13 @@ const PLANS = [
     monthlyPrice: 3500,
     description: 'Pour les indépendants actifs',
     credits: 80,
-    creditsLabel: '80 crédits IA / mois',
+    creditsLabel: 'Crédits IA bientôt disponibles',
     features: [
       '30 devis par mois',
       'PDF avec modèles de devis',
       'Lien de paiement MoMo / carte',
       'Suivi des paiements en temps réel',
-      '80 crédits IA / mois',
+      '80 crédits IA / mois (bientôt)',
     ],
     missing: [],
     highlighted: true,
@@ -47,13 +48,13 @@ const PLANS = [
     monthlyPrice: 9000,
     description: 'Pour les PME',
     credits: 200,
-    creditsLabel: '200 crédits IA / mois',
+    creditsLabel: 'Crédits IA bientôt disponibles',
     features: [
       'Devis illimités',
       'PDF avec modèles de devis',
       'Lien de paiement MoMo / carte',
       'Suivi des paiements en temps réel',
-      '200 crédits IA / mois',
+      '200 crédits IA / mois (bientôt)',
       'Plusieurs collaborateurs (bientôt)',
     ],
     missing: [],
@@ -101,6 +102,7 @@ export default function Pricing() {
   const [upgrading, setUpgrading] = useState<'PRO' | 'BUSINESS' | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [showAiComingSoon, setShowAiComingSoon] = useState(false);
 
   useEffect(() => {
     if (!upgradedParam || !txIdParam) return;
@@ -131,7 +133,6 @@ export default function Pricing() {
       .finally(() => setConfirming(false));
   }, [creditsPurchased, txIdParam, packPurchasedId]);
   const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly');
-  const [purchasingPack, setPurchasingPack] = useState<string | null>(null);
 
   const { data: quotaData } = useQuery({
     queryKey: ['quota'],
@@ -148,14 +149,6 @@ export default function Pricing() {
   const upgradeMutation = useMutation({
     mutationFn: ({ plan, interval }: { plan: 'PRO' | 'BUSINESS'; interval: 'monthly' | 'annual' }) =>
       paymentsApi.upgrade(plan, interval),
-    onSuccess: (res) => {
-      const { paymentUrl } = res.data;
-      if (paymentUrl) window.location.href = paymentUrl;
-    },
-  });
-
-  const purchaseMutation = useMutation({
-    mutationFn: (packId: string) => creditsApi.purchase(packId),
     onSuccess: (res) => {
       const { paymentUrl } = res.data;
       if (paymentUrl) window.location.href = paymentUrl;
@@ -359,7 +352,7 @@ export default function Pricing() {
         <div className="mt-8 lg:mt-10">
           <div className="text-center mb-4 lg:mb-6">
             <div className="text-[16px] lg:text-[18px] font-semibold tracking-[-0.01em] mb-1">Crédits IA supplémentaires</div>
-            <div className="text-[12.5px] lg:text-[13px] text-text-muted px-4">Achetez des crédits à tout moment, utilisables sur n'importe quel plan</div>
+            <div className="text-[12.5px] lg:text-[13px] text-text-muted px-4">L'achat de crédits IA sera ouvert prochainement</div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4">
@@ -382,13 +375,9 @@ export default function Pricing() {
                   <Button
                     variant="secondary"
                     className="w-full"
-                    loading={purchaseMutation.isPending && purchasingPack === pack.id}
-                    onClick={() => {
-                      setPurchasingPack(pack.id);
-                      purchaseMutation.mutate(pack.id);
-                    }}
+                    onClick={() => setShowAiComingSoon(true)}
                   >
-                    Acheter
+                    Bientôt disponible
                   </Button>
                 </div>
               );
@@ -396,7 +385,7 @@ export default function Pricing() {
           </div>
 
           <div className="mt-3 lg:mt-4 p-3 bg-surface border border-border rounded text-[11.5px] lg:text-[12px] text-text-muted text-center leading-snug">
-            Les crédits IA permettent de générer des devis automatiquement, suggérer des prix et améliorer vos descriptions. <strong className="text-text">1 crédit = 1 action IA</strong>.
+            Les crédits IA permettront de générer des devis automatiquement, suggérer des prix et améliorer vos descriptions. Cette fonctionnalité sera activée prochainement.
           </div>
         </div>
 
@@ -406,6 +395,7 @@ export default function Pricing() {
           Aucun frais fixe supplémentaire.
         </div>
       </div>
+      <AiComingSoonDialog open={showAiComingSoon} onClose={() => setShowAiComingSoon(false)} />
     </div>
   );
 }

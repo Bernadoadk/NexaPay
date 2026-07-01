@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { creditsApi } from '@/lib/api';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
+import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import {
   HomeIcon, FileIcon, UsersIcon, ReceiptIcon,
   PlusIcon, LogOutIcon, SettingsIcon,
@@ -44,6 +46,7 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const [showAiComingSoon, setShowAiComingSoon] = useState(false);
   const logoRef = useEntrance<HTMLDivElement>('fadeIn', { duration: 400 });
   const navRef = useChildrenStagger<HTMLElement>([], { stagger: 45, delay: 120 });
 
@@ -95,8 +98,8 @@ export default function Sidebar() {
 
       {/* Crédits IA — visible en permanence */}
       <button
-        onClick={() => navigate('/pricing')}
-        title="Acheter des crédits IA"
+        onClick={() => setShowAiComingSoon(true)}
+        title="Crédits IA bientôt disponibles"
         className={`group mb-2.5 w-full rounded-lg border px-3 py-2.5 flex items-center gap-2.5 transition-colors text-left ${
           lowCredits
             ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/40 hover:bg-amber-100/70 dark:hover:bg-amber-950/30'
@@ -131,7 +134,7 @@ export default function Sidebar() {
         <span className={`text-[10.5px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity ${
           lowCredits ? 'text-amber-700 dark:text-amber-400' : 'text-primary-hover'
         }`}>
-          + Acheter
+          Bientôt
         </span>
       </button>
 
@@ -191,6 +194,7 @@ export default function Sidebar() {
         </div>
         <LogOutIcon size={14} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
       </button>
+      <AiComingSoonDialog open={showAiComingSoon} onClose={() => setShowAiComingSoon(false)} />
     </aside>
   );
 }

@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme, type ThemePreference } from '@/contexts/ThemeContext';
 import Button from '@/components/ui/Button';
 import Avatar from '@/components/ui/Avatar';
+import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import PhoneCountryInput from '@/components/ui/PhoneCountryInput';
 import { toE164, fromE164 } from '@/lib/phone';
 import { SunIcon, MoonIcon, MonitorIcon } from '@/components/ui/Icon';
@@ -104,6 +105,7 @@ export default function Settings() {
 
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [quoteLogoLoading, setQuoteLogoLoading] = useState(false);
+  const [showAiComingSoon, setShowAiComingSoon] = useState(false);
   const [useProfilePhoto, setUseProfilePhoto] = useState(user?.useProfilePhotoAsLogo ?? true);
   function parseUserPhone(u: typeof user) {
     const raw = u?.phone ?? '';
@@ -279,10 +281,10 @@ export default function Settings() {
                   <strong className="text-text">{creditData?.aiCredits ?? 0}</strong>
                 </div>
                 <button
-                  onClick={() => navigate('/pricing')}
+                  onClick={() => setShowAiComingSoon(true)}
                   className="text-[12px] text-primary hover:underline font-medium"
                 >
-                  Acheter des crédits
+                  Bientôt disponible
                 </button>
               </div>
             )}
@@ -473,6 +475,7 @@ export default function Settings() {
           )}
         </form>
       </div>
+      <AiComingSoonDialog open={showAiComingSoon} onClose={() => setShowAiComingSoon(false)} />
     </div>
   );
 }

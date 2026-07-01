@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { quotesApi, creditsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChevronLeftIcon, BellIcon, SearchIcon } from '@/components/ui/Icon';
+import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import SearchOverlay from './SearchOverlay';
 import NotificationsDropdown from './NotificationsDropdown';
 
@@ -30,6 +31,7 @@ export default function MobileTopbar({ title, subtitle, onBack, showBack }: Prop
   const { user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [showAiComingSoon, setShowAiComingSoon] = useState(false);
 
   // Show back chevron on every non-root page by default.
   const showBackChevron = showBack ?? pathname !== '/';
@@ -85,8 +87,8 @@ export default function MobileTopbar({ title, subtitle, onBack, showBack }: Prop
         {/* AI credits chip — tap to view/buy */}
         {user && (
           <button
-            onClick={() => navigate('/pricing')}
-            title={`${aiCredits} crédits IA`}
+            onClick={() => setShowAiComingSoon(true)}
+            title="Crédits IA bientôt disponibles"
             className={`flex items-center gap-1 h-7 px-2 rounded-full text-[11.5px] font-semibold whitespace-nowrap transition-colors ${
               lowCredits
                 ? 'bg-amber-50 text-amber-700 border border-amber-300 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/40'
@@ -124,6 +126,7 @@ export default function MobileTopbar({ title, subtitle, onBack, showBack }: Prop
           <NotificationsDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
         </div>
       </header>
+      <AiComingSoonDialog open={showAiComingSoon} onClose={() => setShowAiComingSoon(false)} />
     </>
   );
 }

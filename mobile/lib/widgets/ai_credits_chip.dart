@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/credits_provider.dart';
 import '../theme.dart';
+import 'ai_coming_soon_dialog.dart';
 
 /// Compact chip showing the current AI credit balance — tappable to open
 /// the credits screen / pricing. Mirrors the React `<Sidebar>` credits card.
@@ -30,7 +31,7 @@ class AiCreditsChip extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap ?? () => Navigator.of(context).pushNamed('/credits'),
+        onTap: onTap ?? () => showAiComingSoonDialog(context),
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: dense ? 8 : 10,

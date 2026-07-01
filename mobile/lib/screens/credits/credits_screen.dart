@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../models/credits.dart';
 import '../../providers/credits_provider.dart';
-import '../../services/credits_service.dart';
 import '../../theme.dart';
+import '../../widgets/ai_coming_soon_dialog.dart';
 
 /// Screen mirroring the React `Pricing` credit-pack section :
 /// shows the balance + monthly quota and lets the user buy more packs.
@@ -16,8 +15,6 @@ class CreditsScreen extends StatefulWidget {
 }
 
 class _CreditsScreenState extends State<CreditsScreen> {
-  String? _purchasingPackId;
-
   @override
   void initState() {
     super.initState();
@@ -35,30 +32,6 @@ class _CreditsScreenState extends State<CreditsScreen> {
       count++;
     }
     return '${buf.toString().split('').reversed.join()} F';
-  }
-
-  Future<void> _buy(CreditPack pack) async {
-    setState(() => _purchasingPackId = pack.id);
-    try {
-      final result = await CreditsService.purchase(pack.id);
-      final uri = Uri.parse(result.paymentUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Finalisez le paiement de ${pack.credits} crédits.'),
-          ));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur : $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _purchasingPackId = null);
-    }
   }
 
   @override
@@ -83,7 +56,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
             _BalanceCard(balance: credits.balance, loading: credits.loading),
             const SizedBox(height: 20),
             Text(
-              'Acheter des crédits supplémentaires',
+              'Crédits IA supplémentaires',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -92,7 +65,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              "Utilisables sur n'importe quel plan · 1 crédit = 1 action IA",
+              "L'achat de crédits IA sera ouvert prochainement.",
               style: TextStyle(
                 fontSize: 12.5,
                 color: context.appTextMuted,
@@ -100,7 +73,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
             ),
             const SizedBox(height: 14),
             if (credits.packs.isEmpty && !credits.loading)
-              _DefaultPacks(onBuy: _buy, purchasingId: _purchasingPackId)
+              _DefaultPacks(onBuy: (_) => showAiComingSoonDialog(context))
             else
               ...credits.packs.map(
                 (p) => Padding(
@@ -108,8 +81,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                   child: _PackCard(
                     pack: p,
                     fmtXOF: _fmtXOF,
-                    buying: _purchasingPackId == p.id,
-                    onTap: () => _buy(p),
+                    onTap: () => showAiComingSoonDialog(context),
                   ),
                 ),
               ),
@@ -131,8 +103,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
                     child: Text(
                       "Les crédits IA permettent de générer des devis "
                       "automatiquement, suggérer des prix et améliorer vos "
-                      "descriptions. Si un appel IA échoue, votre crédit est "
-                      "automatiquement remboursé.",
+                      "descriptions. Cette fonctionnalité sera activée prochainement.",
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,
@@ -251,8 +222,8 @@ class _BalanceCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             low
-                ? 'Solde bas — pensez à recharger.'
-                : 'Disponibles immédiatement pour vos actions IA.',
+                ? 'Solde bas — recharge bientôt disponible.'
+                : 'Utilisation disponible prochainement.',
             style: TextStyle(
               fontSize: 12.5,
               color: low
@@ -269,13 +240,11 @@ class _BalanceCard extends StatelessWidget {
 class _PackCard extends StatelessWidget {
   final CreditPack pack;
   final String Function(num) fmtXOF;
-  final bool buying;
   final VoidCallback onTap;
 
   const _PackCard({
     required this.pack,
     required this.fmtXOF,
-    required this.buying,
     required this.onTap,
   });
 
@@ -287,7 +256,7 @@ class _PackCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: buying ? null : onTap,
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -325,30 +294,23 @@ class _PackCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (buying)
-                const SizedBox(
-                  width: 22, height: 22,
-                  child: CircularProgressIndicator(
-                      color: AppColors.primary, strokeWidth: 2.5),
-                )
-              else
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(fmtXOF(pack.price),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary,
-                        )),
-                    const SizedBox(height: 2),
-                    Text('Acheter',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: context.appTextMuted,
-                        )),
-                  ],
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(fmtXOF(pack.price),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                      )),
+                  const SizedBox(height: 2),
+                  Text('Bientôt disponible',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: context.appTextMuted,
+                      )),
+                ],
+              ),
             ],
           ),
         ),
@@ -358,10 +320,9 @@ class _PackCard extends StatelessWidget {
 }
 
 class _DefaultPacks extends StatelessWidget {
-  final Future<void> Function(CreditPack) onBuy;
-  final String? purchasingId;
+  final void Function(CreditPack) onBuy;
 
-  const _DefaultPacks({required this.onBuy, required this.purchasingId});
+  const _DefaultPacks({required this.onBuy});
 
   @override
   Widget build(BuildContext context) {
@@ -391,7 +352,6 @@ class _DefaultPacks extends StatelessWidget {
                 child: _PackCard(
                   pack: p,
                   fmtXOF: fmt,
-                  buying: purchasingId == p.id,
                   onTap: () => onBuy(p),
                 ),
               ))
