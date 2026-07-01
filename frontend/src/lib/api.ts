@@ -180,4 +180,15 @@ export const aiApi = {
     api.post('/ai/improve-text', data),
 };
 
+export const feedbackApi = {
+  create: (data: {
+    subject: string;
+    messageHtml: string;
+    messageText: string;
+    fontFamily?: string;
+    fontSize?: number;
+    source?: string;
+  }) => api.post('/feedback', data),
+};
+
 export default api;

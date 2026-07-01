@@ -45,6 +45,25 @@ model User {
   creditTransactions CreditTransaction[]
   planPayments       PlanPayment[]
   creditPayments     CreditPayment[]
+  feedbackReviews    FeedbackReview[]
+}
+
+model FeedbackReview {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     String
+  messageHtml String
+  messageText String
+  fontFamily  String?
+  fontSize    Int?
+  source      String         @default("dashboard")
+  status      FeedbackStatus @default(NEW)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }
 
 model CreditTransaction {
@@ -431,4 +450,10 @@ enum Plan {
   FREE
   PRO
   BUSINESS
+}
+
+enum FeedbackStatus {
+  NEW
+  READ
+  ARCHIVED
 }

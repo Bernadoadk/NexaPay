@@ -13,6 +13,7 @@ import { storesRouter } from './routes/stores';
 import { uploadRouter } from './routes/upload';
 import { creditsRouter } from './routes/credits';
 import { aiRouter } from './routes/ai';
+import { feedbackRouter } from './routes/feedback';
 import { errorHandler } from './middleware/errorHandler';
 import { prisma } from './lib/prisma';
 
@@ -55,6 +56,7 @@ app.use('/api/stores', storesRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/credits', creditsRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/feedback', feedbackRouter);
 
 app.get('/api/health', async (_req, res) => {
   try {

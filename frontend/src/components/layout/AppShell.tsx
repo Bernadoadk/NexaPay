@@ -8,6 +8,7 @@ import MobileMoreSheet from './MobileMoreSheet';
 import anime from 'animejs';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertTriangle, X } from 'lucide-react';
+import FeedbackWidget from '@/components/feedback/FeedbackWidget';
 
 const TITLE_MAP: Record<string, { title: string; subtitle?: string }> = {
   '/': { title: 'Tableau de bord', subtitle: 'Aperçu de votre activité commerciale' },
@@ -146,6 +147,7 @@ export default function AppShell() {
 
       {/* Mobile "Plus" sheet (rendered outside the main column to overlay everything) */}
       <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
+      {user && <FeedbackWidget />}
     </div>
   );
 }

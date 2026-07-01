@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function login(t: string, u: User) {
     localStorage.setItem('token', t);
+    sessionStorage.removeItem(`feedback-hint-dismissed:${u.id}`);
     setToken(t);
     setUser(u);
   }

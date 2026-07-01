@@ -19,6 +19,20 @@ type AdminAlertData = {
   details?: Record<string, unknown>;
 };
 
+type FeedbackEmailData = {
+  subject: string;
+  messageHtml: string;
+  messageText: string;
+  user: {
+    name: string;
+    email: string;
+    companyName?: string | null;
+    plan?: string | null;
+  };
+  source?: string | null;
+  createdAt: Date;
+};
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -178,6 +192,59 @@ export async function sendAdminAlertEmail(data: AdminAlertData): Promise<void> {
     <h1 style="margin:0 0 12px;color:#111827;font-size:20px;">${escapeHtml(data.title)}</h1>
     <p style="margin:0 0 16px;color:#4b5563;font-size:14px;line-height:1.6;">${escapeHtml(data.message)}</p>
     ${details}
+  </div>
+</body>
+</html>
+    `,
+  });
+}
+
+export async function sendFeedbackEmail(data: FeedbackEmailData): Promise<void> {
+  const subject = escapeHtml(data.subject);
+  const userName = escapeHtml(data.user.name);
+  const userEmail = escapeHtml(data.user.email);
+  const company = data.user.companyName ? escapeHtml(data.user.companyName) : 'Non renseigné';
+  const source = escapeHtml(data.source || 'dashboard');
+  const plan = escapeHtml(data.user.plan || 'FREE');
+  const createdAt = data.createdAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+
+  await transporter.sendMail({
+    from: fromAddress(),
+    to: 'adikpetobernado@gmail.com',
+    replyTo: data.user.email,
+    subject: `[Retour NexaPay] ${data.subject}`,
+    text: [
+      `Objet : ${data.subject}`,
+      `Utilisateur : ${data.user.name} <${data.user.email}>`,
+      `Entreprise : ${data.user.companyName || 'Non renseigné'}`,
+      `Plan : ${data.user.plan || 'FREE'}`,
+      `Source : ${data.source || 'dashboard'}`,
+      '',
+      data.messageText,
+    ].join('\n'),
+    html: `
+<!DOCTYPE html>
+<html lang="fr">
+<body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
+    <div style="background:#0F8F65;padding:22px 24px;color:#ffffff;">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.82;">Nouveau retour utilisateur</div>
+      <h1 style="margin:6px 0 0;font-size:20px;line-height:1.25;">${subject}</h1>
+    </div>
+    <div style="padding:22px 24px;">
+      <div style="margin:0 0 18px;padding:14px;border-radius:12px;background:#f8faf9;border:1px solid #e4e7e3;">
+        <div style="font-size:13px;color:#374151;line-height:1.7;">
+          <strong>${userName}</strong> · ${userEmail}<br/>
+          Entreprise : ${company}<br/>
+          Plan : ${plan} · Source : ${source}<br/>
+          Envoyé le ${escapeHtml(createdAt)}
+        </div>
+      </div>
+      <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:10px;">Message</div>
+      <div style="border:1px solid #e5e7eb;border-radius:14px;padding:16px;color:#111827;font-size:14px;line-height:1.65;">
+        ${data.messageHtml}
+      </div>
+    </div>
   </div>
 </body>
 </html>
