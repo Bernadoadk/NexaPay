@@ -13,6 +13,7 @@ export default function VerifyOTP() {
   const { isDark } = useTheme();
 
   const email: string = (location.state as any)?.email || '';
+  const emailWarning: string | undefined = (location.state as any)?.emailWarning;
   const [digits, setDigits] = useState<string[]>(Array(6).fill(''));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -89,8 +90,6 @@ export default function VerifyOTP() {
     }
   }
 
-  const maskedEmail = email.replace(/(.{2}).+(@.+)/, '$1***$2');
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg p-6">
       <div className="w-full max-w-[420px]">
@@ -108,10 +107,21 @@ export default function VerifyOTP() {
             Vérifiez votre e-mail
           </h1>
           <p className="text-[14px] text-text-muted leading-relaxed">
-            Nous avons envoyé un code à 6 chiffres à<br />
+            {emailWarning
+              ? <>Entrez le code à 6 chiffres envoyé à<br /></>
+              : <>Nous avons envoyé un code à 6 chiffres à<br /></>}
             <span className="font-semibold text-text">{maskedEmail}</span>
           </p>
         </div>
+
+        {emailWarning && (
+          <div className="mb-6 flex items-start gap-2.5 px-4 py-3 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-[13px] rounded-lg border border-amber-500/25">
+            <svg className="w-4 h-4 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <span>{emailWarning} Utilisez « Renvoyer le code » une fois SMTP corrigé.</span>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 flex items-start gap-2.5 px-4 py-3 bg-danger-soft text-danger text-[13px] rounded-lg border border-danger/20">

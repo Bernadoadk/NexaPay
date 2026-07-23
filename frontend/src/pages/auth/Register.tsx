@@ -79,17 +79,32 @@ export default function Register() {
       const e164 = toE164(phone, phoneCountry);
       const res = await authApi.register({ ...data, phone: e164, phoneCountry });
       if (res.data.requiresVerification) {
-        navigate('/verify-email', { state: { email: res.data.email } });
+        navigate('/verify-email', {
+          state: {
+            email: res.data.email,
+            emailWarning: res.data.emailSent === false ? res.data.message : undefined,
+          },
+        });
         return;
       }
       login(res.data.token, res.data.user);
       navigate('/');
     } catch (e: any) {
+      const data = e.response?.data;
+      if (data?.requiresVerification && data?.email) {
+        navigate('/verify-email', {
+          state: {
+            email: data.email,
+            emailWarning: data.message || 'Le code n\'a pas pu être envoyé.',
+          },
+        });
+        return;
+      }
       if (!e.response) {
         setError('Impossible de joindre l\'API. Vérifiez que le backend Vercel est déployé et que VITE_API_URL est correct.');
         return;
       }
-      setError(e.response?.data?.message || 'Erreur lors de la création du compte');
+      setError(data?.message || 'Erreur lors de la création du compte');
     }
   }
 

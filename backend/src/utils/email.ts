@@ -1,5 +1,33 @@
 import nodemailer from 'nodemailer';
 
+export class SmtpConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SmtpConfigError';
+  }
+}
+
+export function assertSmtpConfigured(): void {
+  if (!process.env.SMTP_USER?.trim() || !process.env.SMTP_PASS?.trim()) {
+    throw new SmtpConfigError(
+      'SMTP non configuré : définissez SMTP_USER et SMTP_PASS (mot de passe d\'application Gmail).',
+    );
+  }
+}
+
+export function smtpErrorMessage(err: unknown): string {
+  if (err instanceof SmtpConfigError) return err.message;
+
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/EAUTH|Invalid login|authentication|535|534/i.test(msg)) {
+    return 'Authentification SMTP refusée. Vérifiez SMTP_USER et SMTP_PASS (mot de passe d\'application Google).';
+  }
+  if (/ECONNECTION|ETIMEDOUT|ESOCKET|ECONNREFUSED/i.test(msg)) {
+    return 'Connexion SMTP impossible. Vérifiez SMTP_HOST, SMTP_PORT et votre réseau.';
+  }
+  return `Envoi e-mail échoué : ${msg}`;
+}
+
 type QuoteEmailData = {
   to: string;
   clientName: string;
@@ -61,6 +89,7 @@ function fmtXof(value: number) {
 }
 
 export async function sendOtpEmail(email: string, code: string, name: string): Promise<void> {
+  assertSmtpConfigured();
   await transporter.sendMail({
     from: fromAddress(),
     to: email,

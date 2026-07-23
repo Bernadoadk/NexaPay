@@ -33,13 +33,28 @@ export default function Login() {
     try {
       const res = await authApi.login(data);
       if (res.data.requiresVerification) {
-        navigate('/verify-email', { state: { email: res.data.email } });
+        navigate('/verify-email', {
+          state: {
+            email: res.data.email,
+            emailWarning: res.data.emailSent === false ? res.data.message : undefined,
+          },
+        });
         return;
       }
       login(res.data.token, res.data.user);
       navigate('/');
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Identifiants incorrects');
+      const data = e.response?.data;
+      if (data?.requiresVerification && data?.email) {
+        navigate('/verify-email', {
+          state: {
+            email: data.email,
+            emailWarning: data.message || 'Le code n\'a pas pu être envoyé.',
+          },
+        });
+        return;
+      }
+      setError(data?.message || 'Identifiants incorrects');
     }
   }
 

@@ -8,7 +8,7 @@ import { OAuth2Client } from 'google-auth-library';
 import appleSignin from 'apple-signin-auth';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
-import { sendOtpEmail } from '../utils/email';
+import { sendOtpEmail, smtpErrorMessage } from '../utils/email';
 import { countryFromPhone, toE164 } from '../utils/phone';
 import { deleteCloudinaryImage } from '../lib/cloudinary';
 
@@ -23,17 +23,26 @@ function generateOtp(): string {
 }
 
 async function createAndSendOtp(userId: string, email: string, name: string): Promise<void> {
-  await prisma.otpCode.deleteMany({ where: { userId } });
   const code = generateOtp();
+  await sendOtpEmail(email, code, name);
+  await prisma.otpCode.deleteMany({ where: { userId } });
   const hashedCode = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await prisma.otpCode.create({ data: { email, code: hashedCode, expiresAt, userId } });
-  try {
-    await sendOtpEmail(email, code, name);
-  } catch (err) {
-    console.error('[OTP] Envoi email échoué:', err);
-    // Compte créé — l'utilisateur pourra demander un nouveau code (resend-otp)
-  }
+}
+
+function otpSendFailureResponse(
+  res: import('express').Response,
+  email: string,
+  err: unknown,
+): void {
+  console.error('[OTP] Envoi email échoué:', err);
+  res.status(502).json({
+    message: smtpErrorMessage(err),
+    requiresVerification: true,
+    email,
+    emailSent: false,
+  });
 }
 
 const authAttemptLimiter = rateLimit({
@@ -107,8 +116,12 @@ router.post(
           where: { id: existing.id },
           data: { password: hashed, name, companyName, phone, phoneCountry: country },
         });
-        await createAndSendOtp(existing.id, email, name);
-        res.status(200).json({ requiresVerification: true, email });
+        try {
+          await createAndSendOtp(existing.id, email, name);
+          res.status(200).json({ requiresVerification: true, email, emailSent: true });
+        } catch (otpErr) {
+          otpSendFailureResponse(res, email, otpErr);
+        }
         return;
       }
 
@@ -132,8 +145,12 @@ router.post(
         },
       });
 
-      await createAndSendOtp(user.id, email, name);
-      res.status(201).json({ requiresVerification: true, email });
+      try {
+        await createAndSendOtp(user.id, email, name);
+        res.status(201).json({ requiresVerification: true, email, emailSent: true });
+      } catch (otpErr) {
+        otpSendFailureResponse(res, email, otpErr);
+      }
     } catch (err) {
       console.error('[Register]', err);
       if (err instanceof Prisma.PrismaClientInitializationError) {
@@ -204,8 +221,13 @@ router.post(
     if (!user) { res.status(404).json({ message: 'Compte introuvable' }); return; }
     if (user.isEmailVerified) { res.status(400).json({ message: 'Compte déjà vérifié' }); return; }
 
-    await createAndSendOtp(user.id, email, user.name);
-    res.json({ message: 'Code renvoyé' });
+    try {
+      await createAndSendOtp(user.id, email, user.name);
+      res.json({ message: 'Code renvoyé', emailSent: true });
+    } catch (otpErr) {
+      console.error('[OTP] Renvoi échoué:', otpErr);
+      res.status(502).json({ message: smtpErrorMessage(otpErr), emailSent: false });
+    }
   }
 );
 
@@ -234,8 +256,12 @@ router.post(
     if (!valid) { res.status(401).json({ message: 'Identifiants incorrects' }); return; }
 
     if (!user.isEmailVerified) {
-      await createAndSendOtp(user.id, email, user.name);
-      res.status(200).json({ requiresVerification: true, email });
+      try {
+        await createAndSendOtp(user.id, email, user.name);
+        res.status(200).json({ requiresVerification: true, email, emailSent: true });
+      } catch (otpErr) {
+        otpSendFailureResponse(res, email, otpErr);
+      }
       return;
     }
 
