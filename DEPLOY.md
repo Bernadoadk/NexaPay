@@ -294,3 +294,5 @@ Deploy → copier l’URL Vercel.
 - `backend/vercel.json` — routing API
 - `frontend/vercel.json` — SPA
 - `render.yaml` — option Render (alternative)
+
+Ok
