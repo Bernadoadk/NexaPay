@@ -6,6 +6,14 @@ import { useTheme } from '@/contexts/ThemeContext';
 import logoSrc from '@/assets/Logo.png';
 import logoDarkSrc from '@/assets/Logo-dark.png';
 
+function maskEmail(email: string) {
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return email;
+
+  const visible = localPart.slice(0, Math.min(2, localPart.length));
+  return `${visible}${'•'.repeat(Math.max(1, localPart.length - visible.length))}@${domain}`;
+}
+
 export default function VerifyOTP() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -14,6 +22,7 @@ export default function VerifyOTP() {
 
   const email: string = (location.state as any)?.email || '';
   const emailWarning: string | undefined = (location.state as any)?.emailWarning;
+  const maskedEmail = maskEmail(email);
   const [digits, setDigits] = useState<string[]>(Array(6).fill(''));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
