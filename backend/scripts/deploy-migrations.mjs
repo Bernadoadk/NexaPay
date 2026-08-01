@@ -16,18 +16,21 @@ function run(args, { capture = false } = {}) {
 // Prisma refuses `migrate deploy` on a database created before Prisma Migrate
 // (P3005). Mark only our checked-in baseline as applied in that case. This
 // writes migration metadata; it never runs the baseline SQL against Neon.
-const status = run(['migrate', 'status'], { capture: true });
-const statusOutput = `${status.stdout || ''}\n${status.stderr || ''}`;
+let deployed = run(['migrate', 'deploy'], { capture: true });
+let deployOutput = `${deployed.stdout || ''}\n${deployed.stderr || ''}`;
 
-if (statusOutput.includes('P3005')) {
+// P3005 is emitted by `migrate deploy` (not `migrate status`). An empty
+// database succeeds above and executes the baseline normally. For the existing
+// Neon database, record the baseline as applied and retry without running it.
+if (deployed.status !== 0 && deployOutput.includes('P3005')) {
   console.log('Existing database detected: recording the Prisma baseline without executing it.');
   const resolved = run(['migrate', 'resolve', '--applied', baseline]);
   if (resolved.status !== 0) process.exit(resolved.status ?? 1);
-} else if (status.status !== 0) {
-  process.stdout.write(status.stdout || '');
-  process.stderr.write(status.stderr || '');
-  console.warn('Migration status needs attention; attempting the safe deploy command.');
+
+  deployed = run(['migrate', 'deploy'], { capture: true });
+  deployOutput = `${deployed.stdout || ''}\n${deployed.stderr || ''}`;
 }
 
-const deployed = run(['migrate', 'deploy']);
+process.stdout.write(deployed.stdout || '');
+process.stderr.write(deployed.stderr || '');
 if (deployed.status !== 0) process.exit(deployed.status ?? 1);
