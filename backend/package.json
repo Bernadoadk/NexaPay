@@ -12,7 +12,7 @@
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "node scripts/verify-migrations.mjs && prisma migrate deploy",
+    "db:deploy": "node scripts/verify-migrations.mjs && node scripts/deploy-migrations.mjs",
     "db:seed": "tsx src/seed.ts",
     "db:studio": "prisma studio"
   },
