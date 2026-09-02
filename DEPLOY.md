@@ -1,64 +1,62 @@
 # Déploiement NexaPay — 0 € (Neon + Vercel × 2)
 
-## Architecture — Vercel Services (un projet, deux services)
-
-Vercel détecte les deux applications du dépôt et les déploie **dans un seul
-projet**, sous **une seule URL**. C'est le modèle `services`, configuré par le
-[vercel.json](vercel.json) à la racine.
+## Architecture — un projet Vercel par application
 
 ```
 GitHub (monorepo)
-└── Projet Vercel #1  →  https://nexapay.vercel.app
-    ├── service "frontend"  (frontend/)  →  /
-    └── service "backend"   (backend/)   →  /api/*
-              │
-              └── Neon (PostgreSQL)  →  DATABASE_URL
-
-    Projet Vercel #2  →  https://nexapay-admin.vercel.app
-    └── Dashboard/  (console d'administration, domaine séparé)
+├── frontend/      →  nexapay        →  https://nexapay-three.vercel.app
+├── backend/       →  nexapay-api    →  https://nexapay-api.vercel.app
+├── landing_page/  →  nexapay-page   →  (site vitrine)
+└── Dashboard/     →  nexapay-admin  →  console d'administration
+                          │
+                          └── Neon (PostgreSQL)  →  DATABASE_URL
 ```
 
-| Composant | Où | Coût |
-|-----------|-----|------|
-| Base de données | [Neon](https://neon.tech) Free | **0 €** |
-| API + Frontend | Vercel — projet unique, 2 services | **0 €** |
-| Back-office | Vercel — projet séparé | **0 €** |
+| Projet Vercel | Root Directory | Framework |
+|---------------|----------------|-----------|
+| `nexapay` | `frontend` | Vite |
+| `nexapay-api` | `backend` | Other (`framework: null`) |
+| `nexapay-page` | `landing_page` | Other (statique) |
+| `nexapay-admin` | `Dashboard` | Vite |
 
-**Ce que ce modèle apporte :** une seule URL, donc **plus de CORS ni d'URL d'API
-en dur** entre le front et l'API. `VITE_API_URL=/api` suffit.
+Chaque projet lit le `vercel.json` **de son Root Directory** :
 
-**Deux points à connaître :**
+- `frontend/vercel.json` relaie `/api/*` vers `nexapay-api` et sert le fallback SPA.
+- `backend/vercel.json` porte la commande de migration (`db:deploy`) et
+  l'inclusion du dossier `prisma/` dans la fonction. **Sans lui, les migrations
+  ne tournent pas et Prisma n'a pas son schéma.**
+- `Dashboard/vercel.json` fait comme le frontend : proxy `/api` + fallback SPA.
 
-1. Le service reçoit le **chemin d'origine** : `/api/quotes` arrive à Express
-   comme `/api/quotes`. Aucun changement de code côté back-end.
-2. En mode `services`, les clés `buildCommand`, `installCommand`, `functions` et
-   `framework` ne sont **plus valides à la racine** : elles vivent dans chaque
-   service. C'est pourquoi `backend/vercel.json` et `frontend/vercel.json` ont
-   été fusionnés dans le fichier racine — ne les recréez pas, ils feraient
-   doublon.
-
-Le back-office reste un **projet distinct** : une console d'administration sur
-son propre domaine réduit la surface exposée, et son cycle de déploiement est
-indépendant.
+> Vercel propose aussi un mode « Services » (plusieurs applications dans un seul
+> projet, via un `vercel.json` à la racine). Il n'est **pas** utilisé ici : les
+> projets séparés sont déjà en place, chacun avec son domaine et son cycle de
+> déploiement. Ne créez pas de `vercel.json` à la racine, il n'aurait aucun
+> effet sur ces projets et prêterait à confusion.
 
 ---
 
-## Étape 2 — Créer le projet (frontend + backend)
+## Ajouter le back-office (4ᵉ projet)
 
-1. [vercel.com/new](https://vercel.com/new) → importer le dépôt.
-2. Vercel détecte les deux services et demande le `vercel.json` racine : il est
-   **déjà dans le dépôt**, laissez **Root Directory** à la racine (`./`).
-3. Renseigner les variables d'environnement (voir 2.2), puis déployer.
+1. [vercel.com/new](https://vercel.com/new) → **même dépôt**.
+2. **Root Directory : `Dashboard`** — ce réglage est essentiel : à la racine,
+   Vercel détecte `frontend` + `backend` et réclame une configuration
+   multi-services dont vous n'avez pas besoin.
 
-Le build exécute, pour le service `backend` :
-`npm install` → `npm run db:deploy` (migrations) → `npm run build` (client Prisma).
+| Champ | Valeur |
+|-------|--------|
+| **Project name** | `nexapay-admin` |
+| **Root Directory** | `Dashboard` |
+| **Framework** | Vite |
+| **Variable** | `VITE_API_URL=/api` |
+
+Le proxy vers l'API est déjà écrit dans `Dashboard/vercel.json` : aucune autre
+variable n'est nécessaire, et l'API n'a pas besoin d'être modifiée (les
+domaines `*.vercel.app` sont déjà acceptés par le CORS).
+
+L'accès est réservé aux comptes dont `role = ADMIN` : le back-end refuse les
+autres, et l'interface les renvoie à l'écran de connexion.
 
 ---
-
-## Étape 2bis — Backend sur Vercel (ancien modèle, projets séparés)
-
-<details>
-<summary>Conservé pour référence — non nécessaire avec le modèle services</summary>
 
 ## Étape 2 — Backend sur Vercel (projet séparé)
 
@@ -101,10 +99,6 @@ https://nexapay-api.vercel.app/api/payments/webhook
 
 ---
 
-</details>
-
----
-
 ## Étape 3 — Frontend sur Vercel (projet séparé)
 
 ### 3.1 Créer le 1ᵉʳ projet (ou importer en premier)
@@ -122,7 +116,7 @@ https://nexapay-api.vercel.app/api/payments/webhook
 
 | Variable | Valeur |
 |----------|--------|
-| `VITE_API_URL` | `/api` (modèle services) — ou `https://nexapay-api.vercel.app/api` si projets séparés |
+| `VITE_API_URL` | `/api` — le rewrite de `frontend/vercel.json` relaie vers `nexapay-api` |
 | `VITE_GOOGLE_CLIENT_ID` | … |
 | `VITE_APPLE_CLIENT_ID` | `com.nexapay.app` |
 
@@ -195,26 +189,6 @@ npm run db:migrate --workspace=backend -- --name description_du_changement
 ```
 
 ---
-
-## Back-office — projet Vercel séparé
-
-Le dossier `Dashboard/` n'appartient pas aux workspaces npm : il a son propre
-`package-lock.json` et se déploie comme un projet indépendant.
-
-1. [vercel.com/new](https://vercel.com/new) → **même dépôt**.
-
-| Champ | Valeur |
-|-------|--------|
-| **Project name** | `nexapay-admin` |
-| **Root Directory** | `Dashboard` |
-| **Framework** | Vite |
-| **Variable** | `VITE_API_URL=/api` |
-
-2. Dans `Dashboard/vercel.json`, remplacer `REMPLACER-PAR-URL-DU-PROJET` par
-   l'URL du projet principal, puis redéployer.
-
-L'accès est réservé aux comptes dont le champ `role` vaut `ADMIN` — le back-end
-refuse les autres, et l'interface les renvoie à l'écran de connexion.
 
 ## Compte administrateur
 
