@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { quotesApi } from '@/lib/api';
+import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { SearchIcon, BellIcon } from '@/components/ui/Icon';
 import SearchOverlay from './SearchOverlay';
 import NotificationsDropdown from './NotificationsDropdown';
@@ -15,13 +14,9 @@ export default function Topbar({ title, subtitle, actions }: TopbarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  // Preload quotes for notifications badge count
-  const { data: quotes = [] } = useQuery({
-    queryKey: ['notif-quotes'],
-    queryFn: () => quotesApi.list().then(r => r.data),
-    staleTime: 60_000,
-  });
-  const overdueCount = (quotes as any[]).filter((q: any) => q.status === 'OVERDUE').length;
+  // Use real notification count for badge
+  const { data: unreadCountData, isLoading } = useUnreadNotificationCount();
+  const unreadCount = unreadCountData?.count ?? 0;
 
   // ⌘K / Ctrl+K shortcut
   useEffect(() => {
@@ -59,14 +54,15 @@ export default function Topbar({ title, subtitle, actions }: TopbarProps) {
         <div className="relative">
           <button
             onClick={() => setNotifOpen(v => !v)}
+            aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : 'Notifications'}
+            aria-expanded={notifOpen}
             className="relative h-9 w-9 flex items-center justify-center rounded-xl hover:bg-surface-2 transition-colors"
           >
             <BellIcon size={18} />
-            {overdueCount > 0 && (
-              <span className="absolute top-[7px] right-[7px] w-[8px] h-[8px] bg-danger rounded-full border-[1.5px] border-surface" />
-            )}
-            {overdueCount === 0 && (
-              <span className="absolute top-[7px] right-[7px] w-[7px] h-[7px] bg-primary rounded-full border-[1.5px] border-surface" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 flex items-center justify-center bg-danger text-white text-[10px] font-bold leading-none rounded-full border-2 border-surface">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </button>
           <NotificationsDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />

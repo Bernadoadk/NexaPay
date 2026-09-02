@@ -92,8 +92,12 @@ class AuthService {
     return Map<String, dynamic>.from(res.data);
   }
 
-  static Future<void> deleteAccount() async {
-    await ApiClient.instance.delete('/auth/me', data: {'confirm': 'SUPPRIMER'});
+  /// [password] est exigé par l'API pour les comptes e-mail/mot de passe.
+  static Future<void> deleteAccount({String? password}) async {
+    await ApiClient.instance.delete(
+      '/auth/me',
+      data: {'confirm': 'SUPPRIMER', if (password != null) 'password': password},
+    );
   }
 
   static Future<User> uploadAvatar(String filePath) async {

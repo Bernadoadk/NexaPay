@@ -1,18 +1,23 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { Webhook } from 'fedapay';
+import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { activateCreditPurchase, CREDIT_PACKS, PLAN_CREDITS, PLAN_CREDIT_CAP } from './credits';
 import { syncQuoteFromFedapay } from '../lib/quoteSync';
 import { syncStoreOrderFromFedapay } from '../lib/storeSync';
+import { notifyPayoutCompleted, notifyPayoutFailed } from '../lib/notificationEvents';
+import {
+  createFedapayPaymentLink,
+  fedapayReq,
+  fedapayTransfer,
+  getApprovedFedapayTransaction,
+  getCustomerEmail,
+  getTx,
+  getTxAmount,
+} from '../lib/fedapay';
 
 const router = Router();
-const prisma = new PrismaClient();
-
-const FEDAPAY_BASE = process.env.FEDAPAY_ENV === 'live'
-  ? 'https://api.fedapay.com/v1'
-  : 'https://sandbox-api.fedapay.com/v1';
 
 const PLAN_LIMITS: Record<string, number> = { FREE: 5, PRO: 30, BUSINESS: 9999 };
 const PLAN_PRICES: Record<string, number> = { PRO: 3500, BUSINESS: 9000 };
@@ -23,18 +28,6 @@ const webhookLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
 });
-
-function getTx(data: any) {
-  return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
-}
-
-function getCustomerEmail(tx: any): string {
-  return String(tx?.customer?.email ?? tx?.customer_email ?? '').toLowerCase();
-}
-
-function getTxAmount(tx: any): number {
-  return Number(tx?.amount ?? tx?.amount_debited ?? tx?.amount_transferred ?? 0);
-}
 
 function expectedPlanPayment(plan: 'PRO' | 'BUSINESS', interval: 'monthly' | 'annual') {
   const monthlyPrice = PLAN_PRICES[plan];
@@ -47,24 +40,6 @@ function expectedPlanPayment(plan: 'PRO' | 'BUSINESS', interval: 'monthly' | 'an
     amount,
     description: `Abonnement NexaPay ${plan} — ${months} mois`,
   };
-}
-
-async function getApprovedFedapayTransaction(transactionId: string | number) {
-  const txData: any = await fedapayReq('GET', `/transactions/${transactionId}`);
-  const tx = getTx(txData);
-  if (tx?.status !== 'approved') {
-    throw Object.assign(new Error(`Transaction non approuvée (statut: ${tx?.status || 'inconnu'})`), { status: 402 });
-  }
-  return tx;
-}
-
-async function createFedapayPaymentLink(transactionId: string | number): Promise<string> {
-  const tokenData: any = await fedapayReq('POST', `/transactions/${transactionId}/token`);
-  const paymentUrl = tokenData?.url ?? tokenData?.payment_url;
-  if (!paymentUrl) {
-    throw new Error('Lien de paiement FedaPay manquant');
-  }
-  return String(paymentUrl);
 }
 
 function assertTransactionMatches(
@@ -165,7 +140,19 @@ async function activatePlanUpgrade(
 
 function verifyFedapayWebhook(req: any) {
   const secret = process.env.FEDAPAY_WEBHOOK_SHARED_SECRET;
-  if (!secret) return req.body;
+  if (!secret) {
+    // En production, un webhook non signé est un webhook non authentifié :
+    // on refuse plutôt que d'accepter n'importe quel POST. En dev, on laisse
+    // passer pour pouvoir rejouer des événements à la main.
+    if (process.env.NODE_ENV === 'production') {
+      throw Object.assign(
+        new Error('FEDAPAY_WEBHOOK_SHARED_SECRET non configuré'),
+        { status: 401 },
+      );
+    }
+    console.warn('[Webhook] FEDAPAY_WEBHOOK_SHARED_SECRET absent — signature non vérifiée (dev).');
+    return req.body;
+  }
 
   const signature = req.header('x-fedapay-signature');
   if (!signature) {
@@ -177,21 +164,6 @@ function verifyFedapayWebhook(req: any) {
     : JSON.stringify(req.body);
 
   return Webhook.constructEvent(payload, signature, secret);
-}
-
-async function fedapayReq(method: string, path: string, body?: object) {
-  const apiKey = process.env.FEDAPAY_SECRET_KEY || '';
-  const res = await fetch(`${FEDAPAY_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json() as any;
-  if (!res.ok) throw new Error(data?.message || JSON.stringify(data));
-  return data;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -605,33 +577,15 @@ router.post('/:paymentId/retry', authenticate, async (req: AuthRequest, res): Pr
       data: { status: 'TRANSFERRING', failReason: null },
     });
 
-    const cleanPhone = payment.user.phone.replace(/\s/g, '');
-    const payoutData: any = await fedapayReq('POST', '/payouts', {
-      amount: payment.netAmount,
-      description: `Reversement devis ${payment.quote?.number ?? ''} (retry)`,
-      mode: 'mtn_open',
-      currency: { iso: 'XOF' },
-      customer: {
-        firstname: 'NexaPay',
-        lastname: 'Merchant',
-        email: `payout-${cleanPhone.replace(/\D/g, '')}@nexapay.app`,
-        phone_number: {
-          number: cleanPhone,
-          country: payment.user.phoneCountry || 'bj',
-        },
-      },
-    });
-    const payout = payoutData?.['v1/payout'] ?? payoutData?.v1?.payout ?? payoutData;
-    const transferId = payout?.id;
-    if (!transferId) throw new Error('Payout ID manquant');
-
-    await fedapayReq('PUT', '/payouts/start', [{
-      id: transferId,
-      phone_number: {
-        number: cleanPhone,
-        country: payment.user.phoneCountry || 'bj',
-      },
-    }]);
+    // Passe par le helper partagé : il tente chaque opérateur Mobile Money,
+    // là où ce retry ne réessayait qu'en MTN — donc échouait en boucle pour
+    // un marchand Moov.
+    const transferId = await fedapayTransfer(
+      payment.user.phone,
+      payment.user.phoneCountry || 'bj',
+      payment.netAmount,
+      `Reversement devis ${payment.quote?.number ?? ''} (retry)`,
+    );
 
     const updated = await prisma.payment.update({
       where: { id: payment.id },
@@ -642,12 +596,22 @@ router.post('/:paymentId/retry', authenticate, async (req: AuthRequest, res): Pr
       },
     });
     console.log(`[RetryPayout] OK pour ${payment.user.phone} (${payment.netAmount} XOF)`);
+    await notifyPayoutCompleted(payment.userId, payment.netAmount, payment.quote?.number ?? '', {
+      paymentId: payment.id,
+    }).catch(() => {});
     res.json(updated);
   } catch (err: any) {
     const updated = await prisma.payment.update({
       where: { id: payment.id },
       data: { status: 'FAILED', failReason: err.message },
     });
+    await notifyPayoutFailed(
+      payment.userId,
+      payment.netAmount,
+      payment.quote?.number ?? '',
+      err.message,
+      { paymentId: payment.id },
+    ).catch(() => {});
     res.status(502).json({ message: `Échec du reversement : ${err.message}`, payment: updated });
   }
 });

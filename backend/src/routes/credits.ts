@@ -1,13 +1,17 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { notifyCreditsThreshold } from '../lib/notificationEvents';
+import {
+  createFedapayPaymentLink,
+  fedapayReq,
+  getApprovedFedapayTransaction,
+  getCustomerEmail,
+  getTx,
+  getTxAmount,
+} from '../lib/fedapay';
 
 const router = Router();
-const prisma = new PrismaClient();
-
-const FEDAPAY_BASE = process.env.FEDAPAY_ENV === 'live'
-  ? 'https://api.fedapay.com/v1'
-  : 'https://sandbox-api.fedapay.com/v1';
 
 // Monthly credit quota per plan
 export const PLAN_CREDITS: Record<string, number> = { FREE: 0, PRO: 80, BUSINESS: 200 };
@@ -22,36 +26,6 @@ export const CREDIT_PACKS = [
 ];
 
 type CreditPack = typeof CREDIT_PACKS[number];
-
-function getTx(data: any) {
-  return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
-}
-
-function getCustomerEmail(tx: any): string {
-  return String(tx?.customer?.email ?? tx?.customer_email ?? '').toLowerCase();
-}
-
-function getTxAmount(tx: any): number {
-  return Number(tx?.amount ?? tx?.amount_debited ?? tx?.amount_transferred ?? 0);
-}
-
-async function getApprovedFedapayTransaction(transactionId: string | number) {
-  const txData: any = await fedapayReq('GET', `/transactions/${transactionId}`);
-  const tx = getTx(txData);
-  if (tx?.status !== 'approved') {
-    throw Object.assign(new Error(`Paiement non confirmé (statut: ${tx?.status || 'inconnu'})`), { status: 402 });
-  }
-  return tx;
-}
-
-async function createFedapayPaymentLink(transactionId: string | number): Promise<string> {
-  const tokenData: any = await fedapayReq('POST', `/transactions/${transactionId}/token`);
-  const paymentUrl = tokenData?.url ?? tokenData?.payment_url;
-  if (!paymentUrl) {
-    throw new Error('Lien de paiement FedaPay manquant');
-  }
-  return String(paymentUrl);
-}
 
 function assertCreditTransactionMatches(tx: any, pack: CreditPack, expectedEmail?: string) {
   const expectedDescription = `NexaPay Crédits IA — ${pack.label}`;
@@ -122,18 +96,6 @@ export async function activateCreditPurchase(userId: string, pack: CreditPack, t
   });
 
   return { aiCredits: updated.aiCredits, added: pack.credits, alreadyCredited: false };
-}
-
-async function fedapayReq(method: string, path: string, body?: object) {
-  const apiKey = process.env.FEDAPAY_SECRET_KEY || '';
-  const res = await fetch(`${FEDAPAY_BASE}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json() as any;
-  if (!res.ok) throw new Error(data?.message || JSON.stringify(data));
-  return data;
 }
 
 // Renew credits if 30+ days since last renewal (for paid plans)
@@ -367,9 +329,19 @@ router.post('/purchase', authenticate, async (req: AuthRequest, res): Promise<vo
 // ──────────────────────────────────────────────────────────────
 router.post('/use', authenticate, async (req: AuthRequest, res): Promise<void> => {
   const { action = 'action IA', amount = 1 } = req.body as { action?: string; amount?: number };
-  const cost = Math.max(1, Math.floor(amount));
+  // Libellé fourni par le client : borné avant d'atterrir en base.
+  const label = String(action).slice(0, 200) || 'action IA';
+  const requested = Number(amount);
+  const cost = Math.min(100, Math.max(1, Math.floor(Number.isFinite(requested) ? requested : 1)));
 
   await maybeRenewCredits(req.userId!);
+
+  // Débit atomique : conditionné sur un solde suffisant, pour que deux appels
+  // simultanés ne puissent pas consommer le même crédit.
+  const claimed = await prisma.user.updateMany({
+    where: { id: req.userId!, aiCredits: { gte: cost } },
+    data: { aiCredits: { decrement: cost } },
+  });
 
   const user = await prisma.user.findUnique({
     where: { id: req.userId! },
@@ -377,7 +349,7 @@ router.post('/use', authenticate, async (req: AuthRequest, res): Promise<void> =
   });
   if (!user) { res.status(404).json({ message: 'Utilisateur introuvable' }); return; }
 
-  if (user.aiCredits < cost) {
+  if (claimed.count === 0) {
     res.status(402).json({
       message: 'Crédits IA insuffisants',
       aiCredits: user.aiCredits,
@@ -386,17 +358,18 @@ router.post('/use', authenticate, async (req: AuthRequest, res): Promise<void> =
     return;
   }
 
-  const newBalance = user.aiCredits - cost;
-  await prisma.user.update({ where: { id: req.userId! }, data: { aiCredits: newBalance } });
+  const newBalance = user.aiCredits;
   await prisma.creditTransaction.create({
     data: {
       userId: req.userId!,
       amount: -cost,
       type: 'ai_use',
-      description: action,
+      description: label,
       balanceAfter: newBalance,
     },
   });
+
+  await notifyCreditsThreshold(req.userId!, newBalance).catch(() => {});
 
   res.json({ aiCredits: newBalance, used: cost });
 });

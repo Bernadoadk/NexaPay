@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { quotesApi, creditsApi } from '@/lib/api';
+import { creditsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { ChevronLeftIcon, BellIcon, SearchIcon } from '@/components/ui/Icon';
 import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import SearchOverlay from './SearchOverlay';
@@ -36,12 +37,9 @@ export default function MobileTopbar({ title, subtitle, onBack, showBack }: Prop
   // Show back chevron on every non-root page by default.
   const showBackChevron = showBack ?? pathname !== '/';
 
-  const { data: quotes = [] } = useQuery({
-    queryKey: ['notif-quotes'],
-    queryFn: () => quotesApi.list().then(r => r.data),
-    staleTime: 60_000,
-  });
-  const overdueCount = (quotes as any[]).filter((q: any) => q.status === 'OVERDUE').length;
+  // Use real notification count for badge
+  const { data: unreadCountData } = useUnreadNotificationCount();
+  const unreadCount = unreadCountData?.count ?? 0;
 
   const { data: credits } = useQuery({
     queryKey: ['credits'],
@@ -96,7 +94,7 @@ export default function MobileTopbar({ title, subtitle, onBack, showBack }: Prop
             }`}
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
             </svg>
             {aiCredits}
           </button>
@@ -115,12 +113,14 @@ export default function MobileTopbar({ title, subtitle, onBack, showBack }: Prop
         <div className="relative">
           <button
             onClick={() => setNotifOpen(v => !v)}
-            aria-label="Notifications"
+            aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : 'Notifications'}
             className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-2 text-text-muted"
           >
             <BellIcon size={17} />
-            {overdueCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-[7px] h-[7px] bg-danger rounded-full border-[1.5px] border-surface" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center bg-danger text-white text-[9.5px] font-bold leading-none rounded-full border-2 border-surface">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </button>
           <NotificationsDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />

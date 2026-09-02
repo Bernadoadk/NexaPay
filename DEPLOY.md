@@ -110,6 +110,71 @@ https://nexapay-api.vercel.app/api/payments/webhook
 |-------|--------|
 | **Cold start** | 1ʳᵉ requête après inactivité : quelques secondes (souvent < Render Free qui dort 15 min) |
 | **Timeout** | Max **10 s** (Hobby) par requête — la confirmation paiement avec retries peut être limite ; le webhook + redirect `/pay/success` compensent |
+| **Pas de WebSocket** | Une fonction serverless ne garde pas de connexion ouverte. Les notifications passent alors par le **polling** du front (30 s), ce qui suffit. Laissez `VITE_WS_URL` vide. |
+
+### Notifications système (Web Push)
+
+Pour que les marchands soient prévenus **application fermée** (paiement reçu,
+reversement échoué) :
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Puis, sur le projet **backend** : `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` et
+`VAPID_SUBJECT` (`mailto:…`). Sans ces clés, le push est proprement désactivé —
+le front ne propose pas l'option et les notifications restent visibles dans
+l'application. L'utilisateur active ensuite le push depuis **Réglages →
+Notifications** (la permission navigateur est demandée à ce moment-là, jamais au
+chargement).
+
+### Notifications en temps réel (optionnel)
+
+Le serveur WebSocket ne tourne que sur un hôte long-vivant (Render, VPS). Pour
+l'activer :
+
+1. Déployer le backend sur Render (voir plus bas).
+2. Projet **frontend** → `VITE_WS_URL` = `wss://nexapay-api.onrender.com` → redeploy.
+
+Sans cette variable, aucune socket n'est ouverte et les notifications se
+rafraîchissent par polling. Le token JWT est transmis en sous-protocole
+WebSocket, jamais dans l'URL.
+
+---
+
+## Base de données — migrations
+
+Le build backend exécute `npm run db:deploy`, qui :
+
+1. refuse le déploiement si une migration contient du SQL destructif
+   (`verify-migrations.mjs`) ;
+2. applique les migrations en attente, en marquant la baseline comme déjà
+   appliquée si la base existait avant Prisma Migrate (erreur `P3005`).
+
+**Ne supprimez jamais `backend/prisma/migrations/`** : sans ce dossier,
+`migrate deploy` réussit sans rien créer, et les tables ajoutées depuis
+(`Notification`, `ActivityLog`…) manquent en production — les routes
+concernées répondent alors 500.
+
+Après un changement de `schema.prisma` :
+
+```bash
+npm run db:migrate --workspace=backend -- --name description_du_changement
+```
+
+---
+
+## Compte administrateur (back-office)
+
+Le dossier `Dashboard/` est une application séparée, réservée aux comptes dont
+le champ `role` vaut `ADMIN`. Pour créer ou promouvoir ce compte :
+
+```bash
+ADMIN_EMAIL="vous@exemple.com" ADMIN_PASSWORD="…" npm run db:seed --workspace=backend
+```
+
+Sur un compte déjà existant, le seed accorde seulement le rôle : il ne touche
+jamais au mot de passe.
 
 ---
 

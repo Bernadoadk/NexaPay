@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { countryFromPhone, toE164 } from '../utils/phone';
+import { notifyNewClient } from '../lib/notificationEvents';
 
 const router = Router();
-const prisma = new PrismaClient();
 const COLORS = ['#0F8F65', '#2563EB', '#C2691B', '#7C4FBF', '#B43A3A'];
 
 router.use(authenticate);
@@ -56,6 +56,7 @@ router.post(
     const client = await prisma.client.create({
       data: { name, contact, email, phone, phoneCountry, city, address, ifu, userId: req.userId!, color },
     });
+    notifyNewClient(req.userId!, client.id, client.name).catch(() => {});
     res.status(201).json(client);
   }
 );

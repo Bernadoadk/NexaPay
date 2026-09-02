@@ -1,16 +1,27 @@
 {
   "name": "devisprobenin",
   "private": true,
-  "workspaces": ["backend", "frontend"],
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "db:push": "npm run db:push --workspace=backend",
     "db:migrate": "npm run db:migrate --workspace=backend",
     "db:seed": "npm run db:seed --workspace=backend",
-    "db:studio": "npm run db:studio --workspace=backend"
+    "db:studio": "npm run db:studio --workspace=backend",
+    "lint": "eslint .",
+    "lint:ci": "eslint . --quiet",
+    "typecheck": "tsc --noEmit --project backend/tsconfig.json && tsc --noEmit --project frontend/tsconfig.json",
+    "smoke": "npm run smoke --workspace=backend"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript-eslint": "^8.69.0"
   }
 }

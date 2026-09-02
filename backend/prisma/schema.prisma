@@ -30,6 +30,8 @@ model User {
   phoneCountry  String?   @default("bj")
   isEmailVerified Boolean @default(false)
   authProvider  String    @default("email")
+  role          Role      @default(USER)
+  blocked       Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -46,6 +48,9 @@ model User {
   planPayments       PlanPayment[]
   creditPayments     CreditPayment[]
   feedbackReviews    FeedbackReview[]
+  notifications      Notification[] @relation("NotificationUser")
+  pushSubscriptions  PushSubscription[] @relation("PushSubscriptionUser")
+  activityLogs       ActivityLog[] @relation("ActivityLogUser")
 }
 
 model FeedbackReview {
@@ -64,6 +69,49 @@ model FeedbackReview {
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NotificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // Examples: "payment_received", "credits_low", "subscription_expiring", "quote_sent", "order_received"
+  title     String
+  message   String?
+  data      Json?    // Additional data specific to notification type
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("PushSubscriptionUser", fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("ActivityLogUser", fields: [userId], references: [id], onDelete: Cascade)
+  action      String   // e.g., "login", "quote_created", "payment_received", "feature_used"
+  details     Json?    // optional metadata (e.g., quoteId, amount, feature name)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model CreditTransaction {
@@ -456,4 +504,9 @@ enum FeedbackStatus {
   NEW
   READ
   ARCHIVED
+}
+
+enum Role {
+  USER
+  ADMIN
 }

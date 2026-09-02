@@ -9,8 +9,7 @@ export const prisma =
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-} else {
-  globalForPrisma.prisma = prisma;
-}
+// Conservé sur le global dans tous les environnements : en développement pour
+// survivre au hot-reload de tsx, en serverless pour être réutilisé d'une
+// invocation à l'autre sur la même instance.
+globalForPrisma.prisma = prisma;

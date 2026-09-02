@@ -1,60 +1,12 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './prisma';
 import { generateQuoteNumber } from '../utils/quoteNumber';
-
-const prisma = new PrismaClient();
-
-const FEDAPAY_BASE = process.env.FEDAPAY_ENV === 'live'
-  ? 'https://api.fedapay.com/v1'
-  : 'https://sandbox-api.fedapay.com/v1';
+import { NotificationService } from './notificationService';
+import { logActivity } from './activityLog';
+import { notifyPayoutCompleted, notifyPayoutFailed, notifyStockOut } from './notificationEvents';
+import { fedapayReq, fedapayTransfer, getTx, getTxAmount } from './fedapay';
 
 const lastChecked = new Map<string, number>();
 const THROTTLE_MS = 5_000;
-
-async function fedapayReq(method: string, path: string, body?: object) {
-  const apiKey = process.env.FEDAPAY_SECRET_KEY || '';
-  const res = await fetch(`${FEDAPAY_BASE}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json() as any;
-  if (!res.ok) throw new Error(data?.message || JSON.stringify(data));
-  return data;
-}
-
-function getTx(data: any) {
-  return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
-}
-
-function getTxAmount(tx: any): number {
-  return Number(tx?.amount ?? tx?.amount_debited ?? tx?.amount_transferred ?? 0);
-}
-
-async function fedapayTransfer(phone: string, country: string, amount: number, description: string) {
-  const cleanPhone = phone.replace(/\s/g, '');
-  const payoutData: any = await fedapayReq('POST', '/payouts', {
-    amount,
-    description,
-    mode: 'mtn_open',
-    currency: { iso: 'XOF' },
-    customer: {
-      firstname: 'NexaPay',
-      lastname: 'Merchant',
-      email: `store-payout-${cleanPhone.replace(/\D/g, '')}@nexapay.app`,
-      phone_number: { number: cleanPhone, country },
-    },
-  });
-  const payout = payoutData?.['v1/payout'] ?? payoutData?.v1?.payout ?? payoutData;
-  const payoutId = payout?.id;
-  if (!payoutId) throw new Error('Payout ID manquant dans la réponse Fedapay');
-
-  const startedData: any = await fedapayReq('PUT', '/payouts/start', [{
-    id: payoutId,
-    phone_number: { number: cleanPhone, country },
-  }]);
-  const started = Array.isArray(startedData) ? startedData[0] : startedData?.[0] ?? startedData;
-  return started?.id ?? payoutId;
-}
 
 function expectedDescription(order: { number: string; store: { slug: string } }) {
   return `Boutique ${order.store.slug} — ${order.number}`;
@@ -205,6 +157,7 @@ export async function syncStoreOrderFromFedapay(
   });
   if (claimed.count === 0) return { changed: false, status: 'PAID', fedapayStatus };
 
+  const depletedProducts: { id: string; name: string }[] = [];
   await prisma.$transaction(async (tx) => {
     for (const item of order.items) {
       if (!item.storeProductId) continue;
@@ -221,11 +174,26 @@ export async function syncStoreOrderFromFedapay(
           ...(nextStock <= 0 && !product.allowBackorder ? { status: 'SOLD_OUT' as const } : {}),
         },
       });
+      if (nextStock <= 0) depletedProducts.push({ id: item.storeProductId, name: item.name });
     }
   });
 
   const quoteId = await createPaidQuoteForOrder(order.id);
   console.log(`[syncStoreOrder] Commande ${order.number} → PAID, reçu ${quoteId} (tx ${order.paymentRef})`);
+
+  await NotificationService.createNotification(
+    order.userId,
+    'order_received',
+    'Nouvelle commande payée',
+    `La commande ${order.number} a été payée (${Math.round(order.total).toLocaleString('fr-FR')} FCFA).`,
+    { orderId: order.id, quoteId },
+  ).catch((err) => console.error('[syncStoreOrder] Notification échouée:', err?.message ?? err));
+
+  logActivity(order.userId, 'order_paid', { orderId: order.id, total: order.total });
+
+  for (const product of depletedProducts) {
+    await notifyStockOut(order.userId, product.id, product.name).catch(() => {});
+  }
 
   const existingPayment = await prisma.storePayment.findUnique({ where: { orderId: order.id } });
   if (!existingPayment) {
@@ -253,17 +221,24 @@ export async function syncStoreOrderFromFedapay(
           order.store.momoCountry || 'bj',
           netAmount,
           `Reversement boutique ${order.number}`,
+          { emailPrefix: 'store-payout' },
         );
         await prisma.storePayment.update({
           where: { id: payment.id },
           data: { status: 'TRANSFERRED', transferId: String(transferId), transferredAt: new Date() },
         });
+        await notifyPayoutCompleted(order.userId, netAmount, order.number, {
+          orderId: order.id,
+        }).catch(() => {});
       } catch (transferErr: any) {
         console.error('[syncStoreOrder] Erreur reversement:', transferErr.message);
         await prisma.storePayment.update({
           where: { id: payment.id },
           data: { status: 'FAILED', failReason: transferErr.message },
         });
+        await notifyPayoutFailed(order.userId, netAmount, order.number, transferErr.message, {
+          orderId: order.id,
+        }).catch(() => {});
       }
     }
   }

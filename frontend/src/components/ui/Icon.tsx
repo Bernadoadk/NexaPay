@@ -52,6 +52,7 @@ export const LogOutIcon = (p: IconProps) => <Icon {...p}><path d="M9 21H5a2 2 0 
 export const AlertCircleIcon = (p: IconProps) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></Icon>;
 export const CheckCircleIcon = (p: IconProps) => <Icon {...p}><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="M22 4 12 14l-3-3"/></Icon>;
 export const ClockIcon = (p: IconProps) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></Icon>;
+export const BarChart3 = (p: IconProps) => <Icon {...p}><path d="M3 3h18"/><path d="M7 5h4"/><path d="M7 10h4"/><path d="M7 15h4"/></Icon>;
 
 export const SunIcon = (p: IconProps) => <Icon {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></Icon>;
 export const MoonIcon = (p: IconProps) => <Icon {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></Icon>;

@@ -30,7 +30,12 @@ api.interceptors.response.use(
   (err) => {
     const url = err.config?.url || '';
     const handlesOwnAuthError = authRequestsThatHandleErrorsLocally.some(path => url.startsWith(path));
-    if (err.response?.status === 401 && !handlesOwnAuthError) {
+    // Un compte bloqué reçoit 403 sur toutes les routes : sans ça, l'app
+    // resterait en boucle d'erreurs au lieu de déconnecter.
+    const isBlocked =
+      err.response?.status === 403 && err.response?.data?.code === 'ACCOUNT_BLOCKED';
+
+    if ((err.response?.status === 401 && !handlesOwnAuthError) || isBlocked) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -51,7 +56,9 @@ export const authApi = {
   me: () => api.get('/auth/me'),
   updateMe: (data: object) => api.put('/auth/me', data),
   exportData: () => api.get('/auth/export-data'),
-  deleteAccount: () => api.delete('/auth/me', { data: { confirm: 'SUPPRIMER' } }),
+  // `password` est obligatoire pour les comptes créés par e-mail/mot de passe.
+  deleteAccount: (password?: string) =>
+    api.delete('/auth/me', { data: { confirm: 'SUPPRIMER', password } }),
 };
 
 export const clientsApi = {
@@ -189,6 +196,41 @@ export const feedbackApi = {
     fontSize?: number;
     source?: string;
   }) => api.post('/feedback', data),
+};
+
+// Notification APIs
+export const notificationsApi = {
+  list: (params?: { limit?: number; offset?: number; unreadOnly?: boolean }) =>
+    api.get('/notifications', { params }),
+  unreadCount: () => api.get('/notifications/unread-count'),
+  markAsRead: (id: string) => api.patch(`/notifications/${id}/read`),
+  markAllAsRead: () => api.patch('/notifications/mark-all-read'),
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+  deleteRead: () => api.delete('/notifications'),
+  // Notifications système (Web Push)
+  pushPublicKey: () => api.get('/notifications/push/public-key'),
+  pushSubscribe: (subscription: object) => api.post('/notifications/push/subscribe', subscription),
+  pushUnsubscribe: (endpoint: string) => api.post('/notifications/push/unsubscribe', { endpoint }),
+};
+
+// Analytics APIs
+export const analyticsApi = {
+  users: (params?: { page?: number; limit?: number; search?: string; blocked?: boolean }) =>
+    api.get('/analytics/users', { params }),
+  user: (id: string) => api.get(`/analytics/users/${id}`),
+  blockUser: (id: string, blocked: boolean) =>
+    api.patch(`/analytics/users/${id}/block`, { blocked }),
+  updateUserPlan: (id: string, plan: 'FREE' | 'PRO' | 'BUSINESS') =>
+    api.patch(`/analytics/users/${id}/plan`, { plan }),
+  updateUserCredits: (id: string, amount: number) =>
+    api.patch(`/analytics/users/${id}/credits`, { amount }),
+  stats: () => api.get('/analytics/stats'),
+  activity: (params?: {
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }) => api.get('/analytics/activity', { params }),
 };
 
 export default api;

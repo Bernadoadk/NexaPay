@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { sendFeedbackEmail } from '../utils/email';
+import { notifyFeedbackReceived } from '../lib/notificationEvents';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 
@@ -131,6 +131,8 @@ router.post('/', async (req: AuthRequest, res): Promise<void> => {
       source,
       createdAt: feedback.createdAt,
     });
+
+    notifyFeedbackReceived(req.userId!, feedback.subject).catch(() => {});
 
     res.status(201).json(feedback);
   } catch (err: any) {

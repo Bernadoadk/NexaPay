@@ -8,6 +8,7 @@ import { OAuth2Client } from 'google-auth-library';
 import appleSignin from 'apple-signin-auth';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
+import { logActivity } from '../lib/activityLog';
 import { sendOtpEmail, smtpErrorMessage } from '../utils/email';
 import { countryFromPhone, toE164 } from '../utils/phone';
 import { deleteCloudinaryImage } from '../lib/cloudinary';
@@ -68,25 +69,29 @@ const resendOtpLimiter = rateLimit({
   message: 'Trop de demandes de renvoi. Réessayez dans quelques minutes.',
 });
 
+/**
+ * Vérifie un ID token Google.
+ *
+ * On n'accepte QUE l'ID token signé, validé contre notre propre GOOGLE_CLIENT_ID.
+ * Pas de repli sur /oauth2/v3/userinfo : cet endpoint accepte un access token
+ * émis pour n'importe quelle application, ce qui permettrait à un tiers de
+ * réutiliser le jeton d'un de ses utilisateurs pour entrer dans son compte ici.
+ * `email_verified` est exigé, sinon un compte Google Workspace mal configuré
+ * pourrait revendiquer une adresse qu'il ne contrôle pas.
+ */
 async function getGoogleProfile(token: string): Promise<GoogleProfile> {
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    if (!payload?.email) throw new Error('Email Google manquant');
-    return { email: payload.email, name: payload.name };
-  } catch {
-    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error('Token Google invalide');
-
-    const profile = await response.json() as GoogleProfile;
-    if (!profile.email) throw new Error('Email Google manquant');
-    return { email: profile.email, name: profile.name };
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    throw new Error('GOOGLE_CLIENT_ID non configuré');
   }
+
+  const ticket = await googleClient.verifyIdToken({
+    idToken: token,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+  const payload = ticket.getPayload();
+  if (!payload?.email) throw new Error('Email Google manquant');
+  if (payload.email_verified === false) throw new Error('Email Google non vérifié');
+  return { email: payload.email, name: payload.name };
 }
 
 // POST /auth/register
@@ -203,6 +208,7 @@ router.post(
     });
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    logActivity(user.id, 'email_verified', undefined, req);
     res.json({ token, user });
   }
 );
@@ -266,6 +272,7 @@ router.post(
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    logActivity(user.id, 'login', { provider: 'email' }, req);
     const { password: _, ...safeUser } = user;
     res.json({ token, user: safeUser });
   }
@@ -299,10 +306,13 @@ router.post('/google', async (req, res): Promise<void> => {
 
     if (user) {
       if (user.authProvider === 'email') {
-        // Merge: allow Google on existing email account
+        // Fusion : Google a prouvé la possession de l'adresse, on peut vérifier
+        // le compte. On garde authProvider='email' pour ne pas verrouiller
+        // l'utilisateur hors de sa connexion par mot de passe — les deux
+        // méthodes cohabitent.
         user = await prisma.user.update({
           where: { email },
-          data: { isEmailVerified: true, authProvider: 'google' },
+          data: { isEmailVerified: true },
         });
       }
     } else {
@@ -327,6 +337,7 @@ router.post('/google', async (req, res): Promise<void> => {
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    logActivity(user.id, 'login', { provider: 'google' }, req);
     const { password: _, ...safeUser } = user;
     res.json({ token, user: safeUser });
   } catch (err) {
@@ -353,9 +364,11 @@ router.post('/apple', async (req, res): Promise<void> => {
 
     if (user) {
       if (user.authProvider === 'email') {
+        // Même logique que pour Google : on vérifie le compte sans couper
+        // la connexion par mot de passe.
         user = await prisma.user.update({
           where: { email },
-          data: { isEmailVerified: true, authProvider: 'apple' },
+          data: { isEmailVerified: true },
         });
       }
     } else {
@@ -383,6 +396,7 @@ router.post('/apple', async (req, res): Promise<void> => {
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    logActivity(user.id, 'login', { provider: 'apple' }, req);
     const { password: _, ...safeUser } = user;
     res.json({ token, user: safeUser });
   } catch {
@@ -396,6 +410,8 @@ export const USER_SELECT = {
   logoUrl: true, quoteLogoUrl: true, useProfilePhotoAsLogo: true,
   plan: true, planExpiresAt: true, planInterval: true,
   aiCredits: true, isEmailVerified: true, authProvider: true,
+  // Exposé pour que le back-office sache s'il doit laisser entrer.
+  role: true,
 };
 
 router.get('/me', authenticate, async (req: AuthRequest, res): Promise<void> => {
@@ -457,9 +473,19 @@ router.delete('/me', authenticate, async (req: AuthRequest, res): Promise<void> 
 
   const user = await prisma.user.findUnique({
     where: { id: req.userId },
-    select: { logoPublicId: true, quoteLogoPublicId: true },
+    select: { logoPublicId: true, quoteLogoPublicId: true, password: true, authProvider: true },
   });
   if (!user) { res.status(404).json({ message: 'Utilisateur introuvable' }); return; }
+
+  // Suppression définitive (cascade sur devis, clients, boutique…) : sur un
+  // compte à mot de passe, on le redemande. Un token volé ne suffit pas.
+  if (user.authProvider === 'email' && user.password) {
+    const password = String(req.body?.password ?? '');
+    if (!password || !(await bcrypt.compare(password, user.password))) {
+      res.status(401).json({ message: 'Mot de passe incorrect' });
+      return;
+    }
+  }
 
   await prisma.$transaction([
     prisma.payment.deleteMany({ where: { userId: req.userId! } }),

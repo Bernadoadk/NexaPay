@@ -1,11 +1,29 @@
 import { Router } from 'express';
-import { Prisma, PrismaClient, StoreOrderStatus, StoreProduct, StoreProductStatus } from '@prisma/client';
+import { Prisma, StoreOrderStatus, StoreProduct, StoreProductStatus } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { rateLimit } from '../middleware/rateLimit';
+import { isPlanExpired } from '../lib/planStatus';
 import { createPaidQuoteForOrder, syncStoreOrderFromFedapay } from '../lib/storeSync';
+import { createFedapayPaymentLink, fedapayReq, getTx } from '../lib/fedapay';
 import { cleanCountryCode, countryFromPhone, e164ToLocalDigits, toE164 } from '../utils/phone';
 
 const router = Router();
-const prisma = new PrismaClient();
+
+// Endpoints publics : sans limite, n'importe qui peut créer des commandes en
+// masse et déclencher autant de transactions FedaPay.
+const checkoutLimiter = rateLimit({
+  keyPrefix: 'store-checkout',
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: 'Trop de commandes envoyées. Réessayez dans quelques minutes.',
+});
+
+const orderConfirmLimiter = rateLimit({
+  keyPrefix: 'store-order-confirm',
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+});
 
 const FEDAPAY_BASE = process.env.FEDAPAY_ENV === 'live'
   ? 'https://api.fedapay.com/v1'
@@ -200,32 +218,6 @@ function calcTotals(lines: { quantity: number; unitPrice: number }[], taxRate: n
   return { subtotal, taxAmount, total: subtotal + taxAmount };
 }
 
-async function fedapayReq(method: string, path: string, body?: object) {
-  const apiKey = process.env.FEDAPAY_SECRET_KEY || '';
-  const res = await fetch(`${FEDAPAY_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json() as any;
-  if (!res.ok) throw new Error(data?.message || JSON.stringify(data));
-  return data;
-}
-
-function getTx(data: any) {
-  return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
-}
-
-async function createFedapayPaymentLink(transactionId: string | number): Promise<string> {
-  const tokenData: any = await fedapayReq('POST', `/transactions/${transactionId}/token`);
-  const paymentUrl = tokenData?.url ?? tokenData?.payment_url;
-  if (!paymentUrl) throw new Error('Lien de paiement FedaPay manquant');
-  return String(paymentUrl);
-}
-
 async function nextOrderNumber(userId: string) {
   const now = new Date();
   const prefix = `CMD-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -254,6 +246,7 @@ function publicStoreInclude() {
         quoteLogoUrl: true,
         useProfilePhotoAsLogo: true,
         plan: true,
+        planExpiresAt: true,
       },
     },
   };
@@ -508,10 +501,14 @@ router.get('/public/:slug', async (req, res): Promise<void> => {
     include: publicStoreInclude(),
   });
   if (!store || !store.active) { res.status(404).json({ message: 'Boutique introuvable' }); return; }
+  if (store.user.plan === 'FREE' || isPlanExpired(store.user)) {
+    res.status(404).json({ message: 'Boutique introuvable' });
+    return;
+  }
   res.json(store);
 });
 
-router.post('/public/:slug/checkout', async (req, res): Promise<void> => {
+router.post('/public/:slug/checkout', checkoutLimiter, async (req, res): Promise<void> => {
   const slug = String(req.params.slug);
   const store = await prisma.store.findUnique({
     where: { slug },
@@ -519,7 +516,12 @@ router.post('/public/:slug/checkout', async (req, res): Promise<void> => {
   });
   if (!store || !store.active) { res.status(404).json({ message: 'Boutique introuvable' }); return; }
   if (!store.acceptsOrders) { res.status(403).json({ message: 'Cette boutique ne prend pas de commandes pour le moment' }); return; }
-  if (store.user.plan === 'FREE') { res.status(403).json({ message: 'Boutique indisponible' }); return; }
+  // `authenticate` n'est pas passé ici : on évalue l'échéance nous-mêmes, sinon
+  // un abonnement périmé continuerait d'encaisser.
+  if (store.user.plan === 'FREE' || isPlanExpired(store.user)) {
+    res.status(403).json({ message: 'Boutique indisponible' });
+    return;
+  }
 
   const customerName = String(req.body?.customerName ?? '').trim();
   const requestedCustomerCountry = cleanCountryCode(req.body?.customerPhoneCountry ?? store.momoCountry ?? store.phoneCountry ?? 'bj');
@@ -670,7 +672,7 @@ router.get('/orders/:orderId/public', async (req, res): Promise<void> => {
   res.json(order);
 });
 
-router.post('/orders/:orderId/confirm', async (req, res): Promise<void> => {
+router.post('/orders/:orderId/confirm', orderConfirmLimiter, async (req, res): Promise<void> => {
   try {
     const result = await syncStoreOrderFromFedapay(String(req.params.orderId), { force: true });
     if (result.status !== 'PAID' && !result.changed) {

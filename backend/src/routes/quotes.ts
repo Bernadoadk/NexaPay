@@ -1,13 +1,17 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
-import { PrismaClient, QuoteStatus } from '@prisma/client';
+import { QuoteStatus } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { rateLimit } from '../middleware/rateLimit';
 import { generateQuoteNumber } from '../utils/quoteNumber';
 import { syncQuoteFromFedapay } from '../lib/quoteSync';
+import { logActivity } from '../lib/activityLog';
+import { scanExpiringQuotes } from '../lib/notificationEvents';
 import { sendQuoteEmail } from '../utils/email';
+import { NotificationService } from '../lib/notificationService';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const CLASSIC_TEMPLATE_IDS = new Set([
   'classique', 'marine', 'bordeaux', 'or', 'anthracite', 'prune', 'sable', 'encre',
@@ -19,12 +23,49 @@ function canUseQuoteTemplate(plan: string | null | undefined, templateId: string
 
 router.use(authenticate);
 
+// L'envoi accepte un PDF fourni par le client et part de notre SMTP : sans
+// limite, un compte peut s'en servir comme relais d'expédition.
+const sendEmailLimiter = rateLimit({
+  keyPrefix: 'quote-send-email',
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  key: (req) => (req as AuthRequest).userId || req.ip || 'unknown',
+  message: 'Trop d’envois de devis cette heure-ci. Réessayez plus tard.',
+});
+
 function calcTotals(items: any[], taxRate: number, discount: number) {
   const subtotal = items.reduce((s: number, it: any) => s + it.quantity * it.unitPrice, 0);
   const discountAmt = subtotal * (discount / 100);
   const taxable = subtotal - discountAmt;
   const taxAmount = taxable * (taxRate / 100);
   return { subtotal, taxAmount, total: taxable + taxAmount };
+}
+
+/** Le client doit appartenir au compte : sans ça on rattache un devis au carnet d'adresses d'autrui. */
+async function assertOwnsClient(userId: string, clientId: unknown): Promise<boolean> {
+  const found = await prisma.client.findFirst({
+    where: { id: String(clientId), userId },
+    select: { id: true },
+  });
+  return Boolean(found);
+}
+
+/**
+ * Ne conserve que les productId appartenant au compte. Un id étranger n'est pas
+ * une erreur bloquante (la ligne reste valable avec sa description), on coupe
+ * juste la référence.
+ */
+async function keepOwnedProductIds(userId: string, items: any[]): Promise<Set<string>> {
+  const requested = items
+    .map((it) => (it?.productId ? String(it.productId) : null))
+    .filter((id): id is string => Boolean(id));
+  if (requested.length === 0) return new Set();
+
+  const owned = await prisma.product.findMany({
+    where: { id: { in: requested }, userId },
+    select: { id: true },
+  });
+  return new Set(owned.map((p) => p.id));
 }
 
 router.get('/', async (req: AuthRequest, res): Promise<void> => {
@@ -50,6 +91,9 @@ router.get('/', async (req: AuthRequest, res): Promise<void> => {
   if (pending.length > 0) {
     Promise.allSettled(pending.map(q => syncQuoteFromFedapay(q.id))).catch(() => {});
   }
+
+  // Alerte « devis bientôt expiré » — throttlée par utilisateur, sans cron.
+  scanExpiringQuotes(req.userId!).catch(() => {});
 
   res.json(quotes);
 });
@@ -79,6 +123,13 @@ router.post(
       }
 
       const { title, clientId, items, notes, taxRate = 18, discount = 0, issuedAt, validDays = 30 } = req.body;
+
+      if (!(await assertOwnsClient(req.userId!, clientId))) {
+        res.status(404).json({ message: 'Client introuvable' });
+        return;
+      }
+      const ownedProductIds = await keepOwnedProductIds(req.userId!, items);
+
       const { subtotal, taxAmount, total } = calcTotals(items, taxRate, discount);
 
       let quote;
@@ -99,7 +150,9 @@ router.post(
                   total: (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0),
                   order: i,
                   ...(it.unit ? { unit: String(it.unit).trim() || null } : {}),
-                  ...(it.productId ? { productId: String(it.productId) } : {}),
+                  ...(it.productId && ownedProductIds.has(String(it.productId))
+                    ? { productId: String(it.productId) }
+                    : {}),
                 })),
               },
             },
@@ -111,6 +164,7 @@ router.post(
           throw err;
         }
       }
+      if (quote) logActivity(req.userId!, 'quote_created', { quoteId: quote.id, total: quote.total }, req);
       res.status(201).json(quote);
     } catch (err: any) {
       console.error('[POST /quotes]', err?.message ?? err);
@@ -178,6 +232,13 @@ router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
   if (!exists) { res.status(404).json({ message: 'Devis introuvable' }); return; }
 
   const { items, title, clientId, notes, taxRate, discount, issuedAt, validDays } = req.body;
+
+  if (clientId !== undefined && !(await assertOwnsClient(req.userId!, clientId))) {
+    res.status(404).json({ message: 'Client introuvable' });
+    return;
+  }
+  const ownedProductIds = items ? await keepOwnedProductIds(req.userId!, items) : new Set<string>();
+
   const effectiveTax = taxRate ?? exists.taxRate;
   const effectiveDiscount = discount ?? exists.discount;
 
@@ -204,7 +265,9 @@ router.put('/:id', async (req: AuthRequest, res): Promise<void> => {
             total: (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0),
             order: i,
             ...(it.unit ? { unit: String(it.unit).trim() || null } : {}),
-            ...(it.productId ? { productId: String(it.productId) } : {}),
+            ...(it.productId && ownedProductIds.has(String(it.productId))
+              ? { productId: String(it.productId) }
+              : {}),
           })),
         },
       }),
@@ -220,6 +283,11 @@ router.patch('/:id/status', async (req: AuthRequest, res): Promise<void> => {
   if (!exists) { res.status(404).json({ message: 'Devis introuvable' }); return; }
 
   const { status } = req.body;
+  if (!Object.values(QuoteStatus).includes(status)) {
+    res.status(400).json({ message: 'Statut invalide' });
+    return;
+  }
+
   const extra: Record<string, Date> = {};
   if (status === 'SENT') extra.sentAt = new Date();
   if (status === 'PAID') extra.paidAt = new Date();
@@ -232,7 +300,7 @@ router.patch('/:id/status', async (req: AuthRequest, res): Promise<void> => {
   res.json(updated);
 });
 
-router.post('/:id/send-email', async (req: AuthRequest, res): Promise<void> => {
+router.post('/:id/send-email', sendEmailLimiter, async (req: AuthRequest, res): Promise<void> => {
   const quoteId = String(req.params.id);
   const { pdfBase64, templateId, templateName } = req.body ?? {};
 
@@ -288,6 +356,15 @@ router.post('/:id/send-email', async (req: AuthRequest, res): Promise<void> => {
       data: { status: 'SENT', sentAt: new Date() },
       include: { client: true, items: { orderBy: { order: 'asc' } } },
     });
+
+    await NotificationService.createNotification(
+      quote.userId,
+      'quote_sent',
+      'Devis envoyé',
+      `Votre devis ${quote.number} a été envoyé à ${quote.client.name}`,
+      { quoteId: quote.id }
+    );
+
     res.json(updated);
   } catch (err: any) {
     console.error('[QuoteEmail] Envoi échoué:', err?.message ?? err);

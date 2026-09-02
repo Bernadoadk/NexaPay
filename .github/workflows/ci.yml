@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  typecheck:
+    name: Typecheck & build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install (workspaces backend + frontend)
+        run: npm ci
+
+      # Le client Prisma est généré au postinstall, mais on le refait
+      # explicitement : le typecheck du backend en dépend entièrement.
+      - name: Generate Prisma client
+        run: npm run build --workspace=backend
+
+      - name: Typecheck backend
+        run: npx tsc --noEmit --project backend/tsconfig.json
+
+      # --quiet : seules les erreurs bloquent, les avertissements restent visibles en local.
+      - name: Lint
+        run: npm run lint:ci
+
+      - name: Build frontend
+        run: npm run build --workspace=frontend
+
+      # Le back-office n'est pas dans les workspaces npm : dépendances à part.
+      - name: Install admin dashboard
+        working-directory: Dashboard
+        run: npm install
+
+      - name: Build admin dashboard
+        working-directory: Dashboard
+        run: npm run build
+
+  migrations:
+    name: Migrations sûres
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Refuse toute migration contenant du SQL destructif (DROP, TRUNCATE…).
+      - name: Vérifier les migrations
+        working-directory: backend
+        run: node scripts/verify-migrations.mjs

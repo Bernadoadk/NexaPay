@@ -14,6 +14,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "node scripts/verify-migrations.mjs && node scripts/deploy-migrations.mjs",
     "db:seed": "tsx src/seed.ts",
+    "smoke": "tsx --env-file=.env scripts/smoke.mjs",
+    "preflight": "tsx --env-file=.env scripts/preflight.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {
@@ -21,7 +23,7 @@
     "@types/multer": "^2.1.0",
     "apple-signin-auth": "^2.0.0",
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^1.41.3",
+    "cloudinary": "^2.10.1",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "express-validator": "^7.2.0",
@@ -31,10 +33,11 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
-    "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^8.0.7",
     "prisma": "^5.22.0",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "web-push": "^3.6.7",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -44,7 +47,9 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.9.1",
     "@types/nodemailer": "^8.0.0",
-    "@vercel/node": "^3.2.29",
+    "@types/web-push": "^3.6.4",
+    "@types/ws": "^8.18.1",
+    "@vercel/node": "^8.1.2",
     "typescript": "^5.6.3"
   }
 }

@@ -1,12 +1,37 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const baseline = '20260801121500_baseline';
-const prisma = process.platform === 'win32' ? 'prisma.cmd' : 'prisma';
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const binName = process.platform === 'win32' ? 'prisma.cmd' : 'prisma';
+
+/**
+ * Résout le binaire Prisma sans dépendre du PATH : avec des workspaces npm, il
+ * est hissé à la racine et `node_modules/.bin` du workspace peut être absent.
+ * Repli sur `npx` si aucun chemin local ne correspond.
+ */
+function resolvePrismaBin() {
+  const candidates = [
+    path.resolve(scriptDir, '../node_modules/.bin', binName),
+    path.resolve(scriptDir, '../../node_modules/.bin', binName),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  return found
+    ? { command: found, prefix: [] }
+    : { command: process.platform === 'win32' ? 'npx.cmd' : 'npx', prefix: ['prisma'] };
+}
+
+const { command, prefix } = resolvePrismaBin();
 
 function run(args, { capture = false } = {}) {
-  const result = spawnSync(prisma, args, {
+  const result = spawnSync(command, [...prefix, ...args], {
     stdio: capture ? 'pipe' : 'inherit',
     encoding: 'utf8',
+    // Un .cmd Windows ne peut être lancé sans shell. Les arguments sont des
+    // constantes internes, jamais des entrées utilisateur.
+    shell: command.endsWith('.cmd'),
   });
 
   if (result.error) throw result.error;

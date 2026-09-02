@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { maybeRenewCredits } from './credits';
 import { sendAdminAlertEmail } from '../utils/email';
+import { notifyCreditsThreshold } from '../lib/notificationEvents';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
 const AI_COST = 1; // 1 crédit par appel IA
@@ -118,12 +118,24 @@ async function notifyAiQuotaIfNeeded(err: any, context: { action: string; userId
   });
 }
 
+/**
+ * Débit atomique : `updateMany` conditionné sur un solde suffisant ne modifie
+ * la ligne que si le crédit est disponible. Un lire-puis-écrire laissait deux
+ * appels simultanés consommer le même crédit.
+ */
 async function deductCredit(userId: string, action: string): Promise<{ ok: boolean; remaining: number }> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true } });
-  if (!user || user.aiCredits < AI_COST) return { ok: false, remaining: user?.aiCredits ?? 0 };
+  const claimed = await prisma.user.updateMany({
+    where: { id: userId, aiCredits: { gte: AI_COST } },
+    data: { aiCredits: { decrement: AI_COST } },
+  });
 
-  const newBalance = user.aiCredits - AI_COST;
-  await prisma.user.update({ where: { id: userId }, data: { aiCredits: newBalance } });
+  if (claimed.count === 0) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true } });
+    return { ok: false, remaining: user?.aiCredits ?? 0 };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true } });
+  const newBalance = user?.aiCredits ?? 0;
   await prisma.creditTransaction.create({
     data: {
       userId,
@@ -133,6 +145,8 @@ async function deductCredit(userId: string, action: string): Promise<{ ok: boole
       balanceAfter: newBalance,
     },
   });
+  // Prévient quand le solde devient bas ou nul (au plus une fois par jour).
+  await notifyCreditsThreshold(userId, newBalance).catch(() => {});
   return { ok: true, remaining: newBalance };
 }
 

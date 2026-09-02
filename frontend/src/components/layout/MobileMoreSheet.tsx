@@ -7,8 +7,7 @@ import Avatar from '@/components/ui/Avatar';
 import AiComingSoonDialog from '@/components/ui/AiComingSoonDialog';
 import PwaInstallSheet from './PwaInstallSheet';
 import {
-  DownloadIcon, ReceiptIcon, SettingsIcon, WalletIcon, LogOutIcon, XIcon, ChevronRightIcon, ClockIcon,
-} from '@/components/ui/Icon';
+  DownloadIcon, ReceiptIcon, SettingsIcon, WalletIcon, LogOutIcon, XIcon, ChevronRightIcon, ClockIcon, BellIcon } from '@/components/ui/Icon';
 
 const PLAN_LABELS: Record<string, string> = { FREE: 'Gratuit', PRO: 'Pro', BUSINESS: 'Business' };
 
@@ -156,6 +155,12 @@ export default function MobileMoreSheet({ open, onClose }: Props) {
             hint="Catalogue réutilisable"
             icon={<ReceiptIcon size={18} />}
             onClick={() => go('/products')}
+          />
+          <MoreItem
+            label="Notifications"
+            hint="Paiements, commandes, alertes"
+            icon={<BellIcon size={18} />}
+            onClick={() => go('/notifications')}
           />
           <MoreItem
             label="Historique"

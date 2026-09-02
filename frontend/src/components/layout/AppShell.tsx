@@ -9,6 +9,7 @@ import anime from 'animejs';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertTriangle, X } from 'lucide-react';
 import FeedbackWidget from '@/components/feedback/FeedbackWidget';
+import { useNotificationSocket } from '@/hooks/useNotificationSocket';
 
 const TITLE_MAP: Record<string, { title: string; subtitle?: string }> = {
   '/': { title: 'Tableau de bord', subtitle: 'Aperçu de votre activité commerciale' },
@@ -49,6 +50,7 @@ function useMobileTitle() {
 }
 
 export default function AppShell() {
+  useNotificationSocket();
   const meta = useMeta();
   const mobileTitle = useMobileTitle();
   const { pathname } = useLocation();

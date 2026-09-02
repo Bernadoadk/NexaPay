@@ -16,6 +16,7 @@ import Settings from '@/pages/Settings';
 import Pricing from '@/pages/Pricing';
 import Payouts from '@/pages/Payouts';
 import History from '@/pages/History';
+import Notifications from '@/pages/Notifications';
 import PaymentPage from '@/pages/PaymentPage';
 import PaymentSuccess from '@/pages/PaymentSuccess';
 import StoreManager from '@/pages/StoreManager';
@@ -83,6 +84,7 @@ export default function App() {
         <Route path="settings" element={<Settings />} />
         <Route path="payouts" element={<Payouts />} />
         <Route path="history" element={<History />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="pricing" element={<Pricing />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

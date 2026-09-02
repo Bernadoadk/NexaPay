@@ -1,63 +1,17 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './prisma';
+import { NotificationService } from './notificationService';
+import { logActivity } from './activityLog';
+import { notifyPayoutCompleted, notifyPayoutFailed } from './notificationEvents';
+import { fedapayReq, fedapayTransfer, getTx, getTxAmount } from './fedapay';
 
-const prisma = new PrismaClient();
-
-const FEDAPAY_BASE = process.env.FEDAPAY_ENV === 'live'
-  ? 'https://api.fedapay.com/v1'
-  : 'https://sandbox-api.fedapay.com/v1';
-
-const COMMISSION_RATE = 0.03;
+// Commission prélevée sur les encaissements par lien de paiement.
+// Surchargeable pour aligner sur la commission boutique (Store.commissionRate).
+const COMMISSION_RATE = Number(process.env.QUOTE_COMMISSION_RATE ?? 0.03);
 
 // In-memory throttle: { quoteId → last-check timestamp (ms) }.
 // Prevents hammering Fedapay when the freelancer's UI polls every 8 s.
 const lastChecked = new Map<string, number>();
 const THROTTLE_MS = 5_000;
-
-async function fedapayReq(method: string, path: string, body?: object) {
-  const apiKey = process.env.FEDAPAY_SECRET_KEY || '';
-  const res = await fetch(`${FEDAPAY_BASE}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json() as any;
-  if (!res.ok) throw new Error(data?.message || JSON.stringify(data));
-  return data;
-}
-
-function getTx(data: any) {
-  return data?.['v1/transaction'] ?? data?.v1?.transaction ?? data;
-}
-
-function getTxAmount(tx: any): number {
-  return Number(tx?.amount ?? tx?.amount_debited ?? tx?.amount_transferred ?? 0);
-}
-
-async function fedapayTransfer(phone: string, country: string, amount: number, description: string) {
-  const cleanPhone = phone.replace(/\s/g, '');
-  const payoutData: any = await fedapayReq('POST', '/payouts', {
-    amount,
-    description,
-    mode: 'mtn_open',
-    currency: { iso: 'XOF' },
-    customer: {
-      firstname: 'NexaPay',
-      lastname: 'Merchant',
-      email: `payout-${cleanPhone.replace(/\D/g, '')}@nexapay.app`,
-      phone_number: { number: cleanPhone, country },
-    },
-  });
-  const payout = payoutData?.['v1/payout'] ?? payoutData?.v1?.payout ?? payoutData;
-  const payoutId = payout?.id;
-  if (!payoutId) throw new Error('Payout ID manquant dans la réponse Fedapay');
-
-  const startedData: any = await fedapayReq('PUT', '/payouts/start', [{
-    id: payoutId,
-    phone_number: { number: cleanPhone, country },
-  }]);
-  const started = Array.isArray(startedData) ? startedData[0] : startedData?.[0] ?? startedData;
-  return started?.id ?? payoutId;
-}
 
 function assertQuoteTransactionMatches(tx: any, expectedAmount: number, expectedDescription: string) {
   const txAmount = getTxAmount(tx);
@@ -141,6 +95,16 @@ export async function syncQuoteFromFedapay(
   }
   console.log(`[syncQuote] Devis ${quote.number} → PAID (tx ${quote.paymentRef})`);
 
+  await NotificationService.createNotification(
+    quote.userId,
+    'payment_received',
+    'Paiement reçu',
+    `Le paiement de votre devis ${quote.number} a été reçu.`,
+    { quoteId: quote.id }
+  );
+
+  logActivity(quote.userId, 'payment_received', { quoteId: quote.id, total: quote.total });
+
   // Payment row: skip if already exists for this quote (quoteId is unique).
   const existingPayment = await prisma.payment.findUnique({
     where: { quoteId: quote.id },
@@ -177,15 +141,30 @@ export async function syncQuoteFromFedapay(
           data: { status: 'TRANSFERRED', transferId: String(transferId), transferredAt: new Date() },
         });
         console.log(`[syncQuote] Reversement ${netAmount} XOF effectué pour ${quote.number}`);
+        await notifyPayoutCompleted(quote.userId, netAmount, quote.number, {
+          quoteId: quote.id,
+          paymentId: payment.id,
+        }).catch(() => {});
       } catch (transferErr: any) {
         console.error('[syncQuote] Erreur reversement:', transferErr.message);
         await prisma.payment.update({
           where: { id: payment.id },
           data: { status: 'FAILED', failReason: transferErr.message },
         });
+        await notifyPayoutFailed(quote.userId, netAmount, quote.number, transferErr.message, {
+          quoteId: quote.id,
+          paymentId: payment.id,
+        }).catch(() => {});
       }
     } else {
       console.log(`[syncQuote] Pas de téléphone configuré — reversement ignoré (${quote.number})`);
+      await notifyPayoutFailed(
+        quote.userId,
+        netAmount,
+        quote.number,
+        'aucun numéro Mobile Money enregistré',
+        { quoteId: quote.id, paymentId: payment.id },
+      ).catch(() => {});
     }
   }
 

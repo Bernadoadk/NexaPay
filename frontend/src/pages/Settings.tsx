@@ -13,6 +13,7 @@ import { toE164, fromE164 } from '@/lib/phone';
 import { SunIcon, MoonIcon, MonitorIcon } from '@/components/ui/Icon';
 import { AlertTriangle, Info, Check } from 'lucide-react';
 import type { User } from '@/types';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 const PLAN_LABELS: Record<string, string> = { FREE: 'Gratuit', PRO: 'Pro', BUSINESS: 'Business' };
 const PLAN_COLORS: Record<string, string> = {
@@ -98,6 +99,7 @@ function ImageUploadBox({
 }
 
 export default function Settings() {
+  const push = usePushNotifications();
   const { user, login, updateUser } = useAuth();
   const { preference, setPreference } = useTheme();
   const qc = useQueryClient();
@@ -321,6 +323,49 @@ export default function Settings() {
               );
             })}
           </div>
+        </section>
+
+        {/* Notifications */}
+        <section className="bg-surface border border-border rounded p-5 mb-5">
+          <div className="text-[13px] font-semibold text-text-muted uppercase tracking-[0.04em] mb-4">
+            Notifications
+          </div>
+
+          {!push.available ? (
+            <p className="text-[13px] text-text-muted">
+              Les notifications système ne sont pas disponibles sur cet appareil ou ne sont pas
+              encore activées sur le serveur. Vous recevez les alertes dans l'application.
+            </p>
+          ) : (
+            <div className="flex items-start gap-4 flex-wrap">
+              <div className="flex-1 min-w-[220px]">
+                <div className="text-[14px] font-semibold text-text">Alertes sur cet appareil</div>
+                <p className="text-[12.5px] text-text-muted mt-1 leading-relaxed">
+                  Soyez prévenu d'un paiement reçu ou d'un reversement échoué même lorsque NexaPay
+                  est fermé.
+                </p>
+                {push.status === 'denied' && (
+                  <p className="text-[12px] text-warn mt-2">
+                    Les notifications sont bloquées dans les réglages de votre navigateur.
+                    Autorisez-les pour cette page, puis réessayez.
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="button"
+                variant={push.subscribed ? 'secondary' : 'primary'}
+                disabled={push.busy || push.status === 'denied'}
+                onClick={() => (push.subscribed ? push.disable() : push.enable())}
+              >
+                {push.busy
+                  ? 'Patientez...'
+                  : push.subscribed
+                    ? 'Désactiver'
+                    : 'Activer les notifications'}
+              </Button>
+            </div>
+          )}
         </section>
 
         {/* Photo de profil + Logo devis */}

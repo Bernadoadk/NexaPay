@@ -14,16 +14,25 @@ import { uploadRouter } from './routes/upload';
 import { creditsRouter } from './routes/credits';
 import { aiRouter } from './routes/ai';
 import { feedbackRouter } from './routes/feedback';
+import { notificationsRouter } from './routes/notifications';
+import { analyticsRouter } from './routes/analytics';
 import { errorHandler } from './middleware/errorHandler';
 import { prisma } from './lib/prisma';
 
 const app = express();
+
+// Vercel comme Render placent l'app derrière leur proxy : sans ça `req.ip`
+// renvoie l'adresse du proxy et tous les visiteurs partagent le même compteur
+// de rate limiting. On ne fait confiance qu'au premier hop.
+app.set('trust proxy', 1);
 
 const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '');
 const corsOrigins = [
   frontendUrl,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
 ].filter(Boolean) as string[];
 
 app.use(cors({
@@ -57,6 +66,8 @@ app.use('/api/upload', uploadRouter);
 app.use('/api/credits', creditsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/feedback', feedbackRouter);
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/analytics', analyticsRouter);
 
 app.get('/api/health', async (_req, res) => {
   try {
