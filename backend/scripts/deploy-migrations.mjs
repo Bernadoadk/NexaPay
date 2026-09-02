@@ -58,4 +58,26 @@ if (deployed.status !== 0 && deployOutput.includes('P3005')) {
 
 process.stdout.write(deployed.stdout || '');
 process.stderr.write(deployed.stderr || '');
+
+// P3009 : une migration est enregistrée comme échouée. On ne « débloque » PAS
+// automatiquement — marquer une migration comme appliquée alors qu'elle a
+// réellement échoué laisserait la base dans un état incohérent, en silence.
+if (deployed.status !== 0 && deployOutput.includes('P3009')) {
+  const failed = deployOutput.match(/The `([^`]+)` migration started at/)?.[1];
+  console.error(`
+──────────────────────────────────────────────────────────────
+Migration bloquée : ${failed ?? 'voir le message ci-dessus'}
+
+Prisma refuse d'appliquer de nouvelles migrations tant que celle-ci
+est marquée comme échouée. Diagnostiquez d'abord, sans rien modifier :
+
+  npm run db:status --workspace=backend
+
+Ce script indique si le schéma est intact (cas courant : la base
+existait avant Prisma Migrate) ou si la migration a réellement laissé
+la base à moitié migrée.
+──────────────────────────────────────────────────────────────
+`);
+}
+
 if (deployed.status !== 0) process.exit(deployed.status ?? 1);

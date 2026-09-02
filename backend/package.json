@@ -16,6 +16,7 @@
     "db:seed": "tsx src/seed.ts",
     "smoke": "tsx --env-file=.env scripts/smoke.mjs",
     "preflight": "tsx --env-file=.env scripts/preflight.mjs",
+    "db:status": "tsx --env-file=.env scripts/migration-status.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {

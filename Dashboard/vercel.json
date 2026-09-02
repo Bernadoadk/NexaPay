@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://nexapay-api.vercel.app/api/:path*"
+      "destination": "https://REMPLACER-PAR-URL-DU-PROJET.vercel.app/api/:path*"
     },
     {
       "source": "/((?!assets/).*)",

@@ -1,36 +1,64 @@
 # Déploiement NexaPay — 0 € (Neon + Vercel × 2)
 
-## Architecture recommandée (tout sur Vercel)
+## Architecture — Vercel Services (un projet, deux services)
 
-**Deux projets Vercel distincts**, même repo GitHub, même hébergeur :
+Vercel détecte les deux applications du dépôt et les déploie **dans un seul
+projet**, sous **une seule URL**. C'est le modèle `services`, configuré par le
+[vercel.json](vercel.json) à la racine.
 
 ```
 GitHub (monorepo)
-├── frontend/  →  Projet Vercel #1  →  https://nexapay.vercel.app
-└── backend/   →  Projet Vercel #2  →  https://nexapay-api.vercel.app
-         │
-         └── Neon (PostgreSQL)  →  DATABASE_URL
+└── Projet Vercel #1  →  https://nexapay.vercel.app
+    ├── service "frontend"  (frontend/)  →  /
+    └── service "backend"   (backend/)   →  /api/*
+              │
+              └── Neon (PostgreSQL)  →  DATABASE_URL
+
+    Projet Vercel #2  →  https://nexapay-admin.vercel.app
+    └── Dashboard/  (console d'administration, domaine séparé)
 ```
 
 | Composant | Où | Coût |
 |-----------|-----|------|
 | Base de données | [Neon](https://neon.tech) Free | **0 €** |
-| API (Express) | Vercel — projet **backend** | **0 €** |
-| Frontend React | Vercel — projet **frontend** | **0 €** |
+| API + Frontend | Vercel — projet unique, 2 services | **0 €** |
+| Back-office | Vercel — projet séparé | **0 €** |
 
-Le frontend appelle le backend via `VITE_API_URL`. Le backend autorise le frontend via `FRONTEND_URL` (CORS).
+**Ce que ce modèle apporte :** une seule URL, donc **plus de CORS ni d'URL d'API
+en dur** entre le front et l'API. `VITE_API_URL=/api` suffit.
 
-**Ordre :** Neon → Vercel backend → Vercel frontend → Fedapay / OAuth.
+**Deux points à connaître :**
+
+1. Le service reçoit le **chemin d'origine** : `/api/quotes` arrive à Express
+   comme `/api/quotes`. Aucun changement de code côté back-end.
+2. En mode `services`, les clés `buildCommand`, `installCommand`, `functions` et
+   `framework` ne sont **plus valides à la racine** : elles vivent dans chaque
+   service. C'est pourquoi `backend/vercel.json` et `frontend/vercel.json` ont
+   été fusionnés dans le fichier racine — ne les recréez pas, ils feraient
+   doublon.
+
+Le back-office reste un **projet distinct** : une console d'administration sur
+son propre domaine réduit la surface exposée, et son cycle de déploiement est
+indépendant.
 
 ---
+
+## Étape 2 — Créer le projet (frontend + backend)
+
+1. [vercel.com/new](https://vercel.com/new) → importer le dépôt.
+2. Vercel détecte les deux services et demande le `vercel.json` racine : il est
+   **déjà dans le dépôt**, laissez **Root Directory** à la racine (`./`).
+3. Renseigner les variables d'environnement (voir 2.2), puis déployer.
+
+Le build exécute, pour le service `backend` :
+`npm install` → `npm run db:deploy` (migrations) → `npm run build` (client Prisma).
+
+---
+
+## Étape 2bis — Backend sur Vercel (ancien modèle, projets séparés)
 
 <details>
-<summary>Alternative : backend sur Render (plan gratuit)</summary>
-
-Voir section en bas du fichier ou historique Render. Vercel × 2 évite la mise en veille Render (~15 min).
-</details>
-
----
+<summary>Conservé pour référence — non nécessaire avec le modèle services</summary>
 
 ## Étape 2 — Backend sur Vercel (projet séparé)
 
@@ -73,6 +101,10 @@ https://nexapay-api.vercel.app/api/payments/webhook
 
 ---
 
+</details>
+
+---
+
 ## Étape 3 — Frontend sur Vercel (projet séparé)
 
 ### 3.1 Créer le 1ᵉʳ projet (ou importer en premier)
@@ -90,7 +122,7 @@ https://nexapay-api.vercel.app/api/payments/webhook
 
 | Variable | Valeur |
 |----------|--------|
-| `VITE_API_URL` | `https://nexapay-api.vercel.app/api` |
+| `VITE_API_URL` | `/api` (modèle services) — ou `https://nexapay-api.vercel.app/api` si projets séparés |
 | `VITE_GOOGLE_CLIENT_ID` | … |
 | `VITE_APPLE_CLIENT_ID` | `com.nexapay.app` |
 
@@ -164,10 +196,29 @@ npm run db:migrate --workspace=backend -- --name description_du_changement
 
 ---
 
-## Compte administrateur (back-office)
+## Back-office — projet Vercel séparé
 
-Le dossier `Dashboard/` est une application séparée, réservée aux comptes dont
-le champ `role` vaut `ADMIN`. Pour créer ou promouvoir ce compte :
+Le dossier `Dashboard/` n'appartient pas aux workspaces npm : il a son propre
+`package-lock.json` et se déploie comme un projet indépendant.
+
+1. [vercel.com/new](https://vercel.com/new) → **même dépôt**.
+
+| Champ | Valeur |
+|-------|--------|
+| **Project name** | `nexapay-admin` |
+| **Root Directory** | `Dashboard` |
+| **Framework** | Vite |
+| **Variable** | `VITE_API_URL=/api` |
+
+2. Dans `Dashboard/vercel.json`, remplacer `REMPLACER-PAR-URL-DU-PROJET` par
+   l'URL du projet principal, puis redéployer.
+
+L'accès est réservé aux comptes dont le champ `role` vaut `ADMIN` — le back-end
+refuse les autres, et l'interface les renvoie à l'écran de connexion.
+
+## Compte administrateur
+
+Pour créer ou promouvoir ce compte :
 
 ```bash
 ADMIN_EMAIL="vous@exemple.com" ADMIN_PASSWORD="…" npm run db:seed --workspace=backend

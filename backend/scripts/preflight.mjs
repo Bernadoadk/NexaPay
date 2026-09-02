@@ -70,12 +70,19 @@ try {
     }
   }
 
-  const admins = await prisma.user.count({ where: { role: 'ADMIN' } });
-  if (admins === 0) {
-    console.log('❌ Aucun compte ADMIN — le back-office sera inaccessible (npm run db:seed).');
-    problems.push('aucun administrateur');
-  } else {
-    console.log(`✅ ${admins} compte(s) administrateur.`);
+  // `role` n'existe qu'après la migration : son absence ne doit pas être
+  // rapportée comme une panne de connexion.
+  try {
+    const admins = await prisma.user.count({ where: { role: 'ADMIN' } });
+    if (admins === 0) {
+      console.log('❌ Aucun compte ADMIN — le back-office sera inaccessible (npm run db:seed).');
+      problems.push('aucun administrateur');
+    } else {
+      console.log(`✅ ${admins} compte(s) administrateur.`);
+    }
+  } catch {
+    console.log('❌ Colonne User.role absente — migration non appliquée.');
+    problems.push('colonne role manquante');
   }
 
   console.log('\n── Impact de l\'échéance des abonnements ───────────────\n');
@@ -83,14 +90,19 @@ try {
   // `planExpiresAt` n'était jamais relu : des comptes ont pu dépasser leur
   // échéance tout en gardant leurs droits. Ils seront rétrogradés au premier
   // appel authentifié après la mise en ligne.
-  const expiring = await prisma.user.findMany({
-    where: {
-      plan: { not: 'FREE' },
-      planExpiresAt: { lt: new Date() },
-    },
-    select: { email: true, plan: true, planExpiresAt: true },
-    orderBy: { planExpiresAt: 'desc' },
-  });
+  let expiring = [];
+  try {
+    expiring = await prisma.user.findMany({
+      where: {
+        plan: { not: 'FREE' },
+        planExpiresAt: { lt: new Date() },
+      },
+      select: { email: true, plan: true, planExpiresAt: true },
+      orderBy: { planExpiresAt: 'desc' },
+    });
+  } catch {
+    console.log('⚠️  Lecture impossible (schéma incomplet) — relancez après la migration.');
+  }
 
   if (expiring.length === 0) {
     console.log('✅ Aucun compte payant à échéance dépassée.');
@@ -106,9 +118,9 @@ try {
     console.log('   back-office (Utilisateurs → Plan) AVANT la mise en ligne.');
   }
 
-  const noExpiry = await prisma.user.count({
-    where: { plan: { not: 'FREE' }, planExpiresAt: null },
-  });
+  const noExpiry = await prisma.user
+    .count({ where: { plan: { not: 'FREE' }, planExpiresAt: null } })
+    .catch(() => 0);
   if (noExpiry > 0) {
     console.log(`\nℹ️  ${noExpiry} compte(s) payant(s) sans date d'échéance : ils ne seront pas touchés.`);
   }

@@ -20,6 +20,27 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+// Garde-fou : ce test CRÉE ET SUPPRIME des utilisateurs, modifie des plans et
+// purge des journaux. Lancé par erreur sur la base de production — cas facile
+// quand on vient d'y pointer son .env pour un diagnostic — il y laisserait des
+// traces. On exige donc une base locale, sauf dérogation explicite.
+const dbHost = (() => {
+  try { return new URL(process.env.DATABASE_URL ?? '').hostname; } catch { return ''; }
+})();
+const isLocal = ['localhost', '127.0.0.1', '::1'].includes(dbHost);
+
+if (!isLocal && process.env.SMOKE_ALLOW_REMOTE !== 'yes') {
+  console.error([
+    '',
+    `⛔ DATABASE_URL pointe sur « ${dbHost} », qui n'est pas une base locale.`,
+    "   Ce test écrit en base : il ne doit pas tourner sur la production.",
+    '   Repointez .env sur votre base locale, ou forcez avec SMOKE_ALLOW_REMOTE=yes',
+    '   si vous visez volontairement une base de recette.',
+    '',
+  ].join('\n'));
+  process.exit(1);
+}
+
 async function call(path, token, init = {}) {
   const res = await fetch(`${BASE}${path}`, {
     ...init,

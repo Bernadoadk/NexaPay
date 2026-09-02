@@ -95,6 +95,7 @@ export default tseslint.config(
         setInterval: 'readonly',
         clearInterval: 'readonly',
         NodeJS: 'readonly',
+        URL: 'readonly',
       },
     },
   },
