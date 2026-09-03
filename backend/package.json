@@ -17,6 +17,7 @@
     "smoke": "tsx --env-file=.env scripts/smoke.mjs",
     "preflight": "tsx --env-file=.env scripts/preflight.mjs",
     "db:status": "tsx --env-file=.env scripts/migration-status.mjs",
+    "admin:status": "tsx --env-file=.env scripts/admin-status.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {
