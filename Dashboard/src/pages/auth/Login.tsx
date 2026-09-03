@@ -41,7 +41,21 @@ export default function Login() {
         setError('Réponse inattendue du serveur');
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Identifiants invalides ou accès non autorisé');
+      // Distinguer un refus de l'API d'une panne de configuration : un 404 ou
+      // une absence de réponse signalait « identifiants invalides », ce qui
+      // envoyait chercher le problème du mauvais côté.
+      const status = err?.response?.status;
+      const apiMessage = err?.response?.data?.message;
+
+      if (apiMessage) {
+        setError(apiMessage);
+      } else if (!err?.response) {
+        setError("L'API est injoignable. Vérifiez VITE_API_URL et le proxy /api.");
+      } else if (status === 404) {
+        setError(`Route d'authentification introuvable (404) — VITE_API_URL est probablement incorrect.`);
+      } else {
+        setError(`Connexion refusée (erreur ${status}).`);
+      }
     } finally {
       setLoading(false);
     }

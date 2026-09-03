@@ -18,6 +18,15 @@ async function main() {
   const email = (process.env.ADMIN_EMAIL || 'adikpetobernado@gmail.com').toLowerCase();
   const name = process.env.ADMIN_NAME || 'Bernado';
 
+  // Afficher la cible : un seed lancé sur la mauvaise base est indétectable
+  // autrement, et l'erreur ne se voit qu'au moment de la connexion.
+  try {
+    const target = new URL(process.env.DATABASE_URL ?? '');
+    console.log(`Base ciblée : ${target.hostname}${target.pathname}`);
+  } catch {
+    console.log('Base ciblée : DATABASE_URL illisible');
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } });
 
   if (existing) {

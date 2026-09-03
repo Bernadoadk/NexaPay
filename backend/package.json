@@ -13,11 +13,12 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "node scripts/verify-migrations.mjs && node scripts/deploy-migrations.mjs",
-    "db:seed": "tsx src/seed.ts",
+    "db:seed": "tsx --env-file=.env src/seed.ts",
     "smoke": "tsx --env-file=.env scripts/smoke.mjs",
     "preflight": "tsx --env-file=.env scripts/preflight.mjs",
     "db:status": "tsx --env-file=.env scripts/migration-status.mjs",
     "admin:status": "tsx --env-file=.env scripts/admin-status.mjs",
+    "admin:check": "tsx --env-file=.env scripts/admin-check.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {

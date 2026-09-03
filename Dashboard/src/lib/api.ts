@@ -1,9 +1,14 @@
 import axios from 'axios';
 
-// Dev : proxy Vite (/api → localhost:3001). Prod : VITE_API_URL sur Vercel.
-const apiBase = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
-  : '/api';
+// Dev : proxy Vite (/api → localhost:3001). Prod : rewrite de vercel.json.
+//
+// Même convention que l'application cliente : VITE_API_URL contient le chemin
+// COMPLET de l'API, suffixe « /api » inclus. La version précédente ajoutait
+// « /api » à la valeur fournie, ce qui produisait « /api/api » et un 404 sur
+// chaque appel — avec, à l'écran, un message d'identifiants invalides trompeur.
+const apiBase =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
+  '/api';
 
 const api = axios.create({
   baseURL: apiBase,
